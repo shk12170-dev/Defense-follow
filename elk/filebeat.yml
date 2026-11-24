@@ -1,0 +1,65 @@
+# 앱이 남기는 JSON Lines 로그(감사 로그, 경보)를 Elasticsearch로 보낸다.
+filebeat.inputs:
+  - type: filestream
+    id: defense-audit
+    paths: ["/logs/audit.jsonl"]
+    fields: {stream: audit}
+    fields_under_root: true
+    parsers:
+      - ndjson:
+          target: ""
+          add_error_key: true
+  - type: filestream
+    id: defense-alerts
+    paths: ["/logs/alerts.jsonl"]
+    fields: {stream: alerts}
+    fields_under_root: true
+    parsers:
+      - ndjson:
+          target: ""
+          add_error_key: true
+
+processors:
+  # 로그의 ts(UTC ISO 8601)를 @timestamp로 사용한다
+  - timestamp:
+      field: ts
+      layouts: ["2006-01-02T15:04:05.999Z07:00"]
+      test: ["2026-11-25T07:57:49.123+00:00"]
+  # 새벽 시간대 탐지(R2)용 한국 시간 시각(0~23)을 계산한다
+  - script:
+      lang: javascript
+      source: >
+        function process(event) {
+          var ts = event.Get("ts");
+          if (!ts) { return; }
+          var d = new Date(ts);
+          event.Put("local_hour", (d.getUTCHours() + 9) % 24);
+        }
+  # hash는 Filebeat 기본 템플릿(ECS)에서 객체 필드라 문자열 값이 거절된다 -> 이름을 바꿔 충돌을 피한다
+  - rename:
+      fields:
+        - {from: "hash", to: "chain_hash"}
+        - {from: "prev", to: "chain_prev"}
+      ignore_missing: true
+      fail_on_error: false
+  - drop_fields:
+      fields: ["ts", "agent", "ecs", "input", "log", "host"]
+      ignore_missing: true
+
+# Filebeat 8.x는 기본이 데이터 스트림 방식이라, 날짜가 붙는 일반 인덱스를 쓰려면 ILM과 DSL을 모두 꺼야 한다
+setup.ilm.enabled: false
+setup.dsl.enabled: false
+setup.template.name: "defense"
+setup.template.pattern: "defense-*"
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  indices:
+    - index: "defense-alerts-%{+yyyy.MM.dd}"
+      when.equals:
+        stream: "alerts"
+    - index: "defense-audit-%{+yyyy.MM.dd}"
+      when.equals:
+        stream: "audit"
+
+logging.level: info

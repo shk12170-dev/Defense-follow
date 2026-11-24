@@ -1,0 +1,58 @@
+# 규칙 R4(대량 조회 후 외부 반출)의 Sigma 상관(correlation) 표현.
+# 주의: R4의 '직전 30분 조회 합계 200건 이상' 조건은 합계를 세야 하므로 근사했다.
+# 한 번에 50건 이상 조회한 뒤 30분 안에 내보내기가 이어지면 탐지한다. 정확한 기준은 rules/rules.yaml의 R4가 기준이다.
+title: Customer Page Read With 50 Or More Rows (Export Chain)
+id: 7e1b4d93-6c28-4f05-91a8-3d5c2b7e6505
+name: defense_customer_page_read_chain
+status: experimental
+description: 한 번의 요청으로 50건 이상의 고객 정보를 조회
+author: Defense-follow
+date: 2026-11-25
+logsource:
+  product: defense_follow
+  service: audit
+detection:
+  selection:
+    action: customer.list
+    result: ok
+    rows|gte: 50
+  condition: selection
+level: informational
+---
+title: Customer Data Export
+id: 1a6c9f25-8d37-4b42-b5e0-6f2d8a4c7606
+name: defense_customer_export
+status: experimental
+description: 고객 정보 내보내기 실행
+author: Defense-follow
+date: 2026-11-25
+logsource:
+  product: defense_follow
+  service: audit
+detection:
+  selection:
+    action: customer.export
+    result: ok
+  condition: selection
+level: informational
+---
+title: Bulk Customer Read Followed By Export (Approximation Of R4)
+id: 5b2d8e47-9f13-4a60-8c75-1e4a6c9d7707
+status: experimental
+description: 한 계정이 대량 조회 후 30분 안에 내보내기를 실행 (R4 근사)
+author: Defense-follow
+date: 2026-11-25
+tags:
+  - attack.exfiltration
+  - attack.t1048
+correlation:
+  type: temporal_ordered
+  rules:
+    - defense_customer_page_read_chain
+    - defense_customer_export
+  group-by:
+    - username
+  timespan: 30m
+falsepositives:
+  - 업무상 정당한 대량 조회 후 보고용 내보내기
+level: critical

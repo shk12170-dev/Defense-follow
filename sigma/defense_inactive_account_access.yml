@@ -1,0 +1,29 @@
+title: Access Attempt With Dormant, Locked Or Disabled Account
+id: 6f1d3a52-8c44-4f4b-9b7e-2a1d0c5e9101
+status: experimental
+description: >
+  휴면·퇴사·잠금 계정으로 로그인하거나 기존 토큰을 사용하려는 시도 (규칙 R3).
+  퇴사자 계정 도용이나 잠금 우회 시도를 의심할 수 있다.
+author: Defense-follow
+date: 2026-11-25
+tags:
+  - attack.initial_access
+  - attack.t1078
+logsource:
+  product: defense_follow
+  service: audit
+detection:
+  selection_login:
+    action: auth.login
+    result: denied
+    detail|contains:
+      - 'status=dormant'
+      - 'status=locked'
+  selection_token:
+    action: auth.token
+    result: denied
+    detail|contains: 'inactive account'
+  condition: 1 of selection_*
+falsepositives:
+  - 휴면 해제를 잊은 정상 직원의 복귀 로그인
+level: high

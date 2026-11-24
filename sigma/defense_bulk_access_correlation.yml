@@ -1,0 +1,43 @@
+# 규칙 R1(대량 조회)의 Sigma 상관(correlation) 표현.
+# 주의: Sigma 상관 규칙은 이벤트 개수를 셀 수 있지만 rows 필드의 합계는 표현하지 못한다.
+# 여기서는 '한 번에 50건 이상 조회'를 한 번의 이벤트로 보고 10분 내 6회 이상(= 약 300건 이상)으로 근사했다.
+# 정확한 합계 기준은 rules/rules.yaml의 R1(threshold_rows: 300)이 기준이다.
+title: Customer Page Read With 50 Or More Rows
+id: 9d3f5b78-1a2c-4e90-b6d4-0e8f7a3c5303
+name: defense_customer_page_read
+status: experimental
+description: 한 번의 요청으로 50건 이상의 고객 정보를 조회
+author: Defense-follow
+date: 2026-11-25
+logsource:
+  product: defense_follow
+  service: audit
+detection:
+  selection:
+    action|startswith: 'customer.'
+    result: ok
+    rows|gte: 50
+  condition: selection
+level: informational
+---
+title: Bulk Customer Data Access (Approximation Of R1)
+id: 4c8a2e61-7b95-4d13-a0f7-5e1b9d6c8404
+status: experimental
+description: 한 계정이 10분 안에 50건 이상 조회를 6회 이상 수행 (R1 근사)
+author: Defense-follow
+date: 2026-11-25
+tags:
+  - attack.collection
+  - attack.t1213
+correlation:
+  type: event_count
+  rules:
+    - defense_customer_page_read
+  group-by:
+    - username
+  timespan: 10m
+  condition:
+    gte: 6
+falsepositives:
+  - 업무가 몰리는 시간대에 목록을 연속으로 넘겨 보는 정상 상담원
+level: high

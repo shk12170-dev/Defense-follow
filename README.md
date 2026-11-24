@@ -71,6 +71,11 @@ python -m venv .venv
 | `GET /stats` | admin | 대시보드 집계 |
 | `POST /admin/users/{username}/unlock` | admin | 자동 잠금 해제 (휴면 계정은 불가) |
 
+## ELK·Docker (선택)
+`docker compose up --build`로 앱 + Elasticsearch + Kibana + Filebeat를 한 번에 실행합니다. 감사 로그와 경보를 Kibana에서 검색·시각화하고, 탐지 규칙은 [Sigma 형식](sigma/)으로도 제공합니다. 자세한 내용은 [docs/ELK.md](docs/ELK.md)를 보세요 (로컬 전용, 메모리 약 3GB 필요).
+
+![Kibana 대시보드](docs/screenshots/04-kibana-dashboard.jpg)
+
 ## 설계 포인트
 - **최소 권한:** 상담원은 담당 고객만, DBA는 API 접근 불가, 마스킹 해제는 관리자 + 사유 필수
 - **우회 차단:** 검색 와일드카드(`%%`)로 전수 조회하는 경로를 테스트 중 발견해 막음
@@ -83,8 +88,10 @@ python -m venv .venv
 ```
 app/          FastAPI 서비스, 탐지 엔진(detection.py), 자동 대응(response.py), 대시보드(static/)
 rules/        탐지 규칙 (rules.yaml)
-scripts/      seed.py, attack_sim.py, detect.py, benchmark.py, verify_audit.py
-tests/        pytest (일차별 test_day1~6)
+scripts/      seed.py, attack_sim.py, detect.py, benchmark.py, verify_audit.py, kibana_setup.py, docker_start.py
+elk/          Filebeat 설정
+sigma/        Sigma 형식 탐지 규칙
+tests/        pytest (일차별 test_day1~6, test_day8_elk)
 docs/         보고서, 플레이북, 비교 결과, 스크린샷
 기획서.md      프로젝트 기획서
 ```
@@ -98,5 +105,5 @@ docs/         보고서, 플레이북, 비교 결과, 스크린샷
 - 저속 공격 대응: 일·주간 누적 조회량 규칙, 사용자별 기준선(UEBA)
 - 반출 사전 차단: 내보내기 직전에 직전 조회량을 검사
 - 오탐 완화: 단계적 대응(경고 → 추가 인증 → 잠금), 잠금 전 관리자 확인
-- 운영 환경 연동: ELK(Elasticsearch/Kibana), Sigma 규칙 포맷, Docker Compose 배포
+- ELK·Docker Compose는 실제 기동까지 확인했습니다. Sigma 규칙은 변환·실행 도구로 돌려 보지는 않았습니다 ([docs/ELK.md](docs/ELK.md) 참고)
 - 측정은 합성 로그와 단일 PC 인프로세스 기준이며, 실제 업무 패턴과 네트워크 지연은 반영하지 않았습니다.

@@ -36,6 +36,7 @@ def make_app(mode, n_customers):
     with tempfile.TemporaryDirectory() as tmp:
         os.environ["DEFENSE_DB"] = str(Path(tmp) / "b.db")
         os.environ["DEFENSE_AUDIT_LOG"] = str(Path(tmp) / "audit.jsonl")
+        os.environ["DEFENSE_ALERT_LOG"] = str(Path(tmp) / "alerts.jsonl")
         os.environ["DEFENSE_MODE"] = mode
         from app import config
         importlib.reload(config)

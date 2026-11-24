@@ -4,6 +4,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = Path(os.environ.get("DEFENSE_DB", BASE_DIR / "data" / "app.db"))
 AUDIT_LOG_PATH = Path(os.environ.get("DEFENSE_AUDIT_LOG", BASE_DIR / "logs" / "audit.jsonl"))
+ALERT_LOG_PATH = Path(os.environ.get("DEFENSE_ALERT_LOG", BASE_DIR / "logs" / "alerts.jsonl"))
 # 모의 환경 전용 키. 실제 서비스에서는 환경변수/비밀관리 서비스로 주입해야 한다.
 JWT_SECRET = os.environ.get("DEFENSE_JWT_SECRET", "local-demo-only-secret-change-me-32bytes!")
 JWT_ALG = "HS256"

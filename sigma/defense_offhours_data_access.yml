@@ -1,0 +1,27 @@
+title: Customer Data Access During Off Hours
+id: 2b9e7c14-35d0-4a6e-8f13-7c4a1e6d9202
+status: experimental
+description: >
+  심야·새벽(00:00~05:59 KST)에 고객정보에 접근 (규칙 R2).
+  Sigma 핵심 문법에는 시간대 조건이 없어, Filebeat가 계산해 넣는 local_hour 필드(KST 0~23)를 사용한다.
+author: Defense-follow
+date: 2026-11-25
+tags:
+  - attack.initial_access
+  - attack.t1078
+logsource:
+  product: defense_follow
+  service: audit
+detection:
+  selection:
+    action|startswith: 'customer.'
+    result: ok
+    local_hour|lt: 6
+  condition: selection
+fields:
+  - username
+  - action
+  - local_hour
+falsepositives:
+  - 야근, 장애 대응 등 정당한 심야 업무
+level: medium

@@ -1,0 +1,79 @@
+# Defense-follow + ELK 스택 (로컬 모의 환경 전용: Elasticsearch 보안 기능을 끄고 모든 포트를 127.0.0.1에만 공개)
+#   docker compose up --build
+#   앱 http://127.0.0.1:8000/dashboard · Kibana http://127.0.0.1:5601
+name: defense-follow
+
+services:
+  app:
+    build: .
+    image: defense-follow:local
+    environment:
+      DEFENSE_MODE: "on"
+      DEFENSE_JWT_SECRET: ${DEFENSE_JWT_SECRET:-local-demo-only-secret-change-me-32bytes!}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - app-data:/app/data
+      - app-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/docs')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    mem_limit: 1g
+    ports:
+      - "127.0.0.1:9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -vq '\"status\":\"red\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      TELEMETRY_OPTIN: "false"
+    mem_limit: 1g
+    ports:
+      - "127.0.0.1:${KIBANA_PORT:-5601}:5601"  # 5601이 사용 중이면 KIBANA_PORT=5602 처럼 바꾼다
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.15.3
+    user: root
+    command: ["filebeat", "-e", "--strict.perms=false"]
+    volumes:
+      - ./elk/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - app-logs:/logs:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+
+  kibana-setup:
+    image: defense-follow:local
+    command: ["python", "scripts/kibana_setup.py"]
+    environment:
+      KIBANA_URL: http://kibana:5601
+    depends_on:
+      - app
+      - kibana
+    restart: "no"
+
+volumes:
+  app-data:
+  app-logs:
+  es-data:

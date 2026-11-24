@@ -150,12 +150,23 @@ def load_events_from_db(db):
 
 def save_alerts(db, alerts):
     """같은 (규칙, 사용자, 시각) 경보는 한 번만 저장한다. 새로 저장된 건수를 반환."""
+    from app import config
     n = 0
+    fresh = []
     for a in alerts:
         cur = db.execute(
             "INSERT OR IGNORE INTO alerts(ts,rule_id,rule_name,severity,mitre,user_key,username,detail) VALUES(?,?,?,?,?,?,?,?)",
             (a.ts, a.rule_id, a.rule_name, a.severity, a.mitre, a.user_key, a.username,
              json.dumps(a.detail, ensure_ascii=False)))
         n += cur.rowcount
+        if cur.rowcount:
+            fresh.append(a)
     db.commit()
+    if fresh:  # ELK(Filebeat)가 수집할 수 있도록 새로 저장된 경보만 JSON Lines로도 남긴다
+        config.ALERT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(config.ALERT_LOG_PATH, "a", encoding="utf-8") as f:
+            for a in fresh:
+                f.write(json.dumps({"ts": a.ts, "rule_id": a.rule_id, "rule_name": a.rule_name,
+                                    "severity": a.severity, "mitre": a.mitre, "user_key": a.user_key,
+                                    "username": a.username, "detail": a.detail}, ensure_ascii=False) + "\n")
     return n
