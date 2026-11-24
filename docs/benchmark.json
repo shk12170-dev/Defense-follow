@@ -1,0 +1,141 @@
+{
+  "generated": "2026-11-25 07:53 KST",
+  "customers": 4000,
+  "scenarios": {
+    "off": {
+      "bulk": {
+        "rows": 805,
+        "blocked": false,
+        "block_request": null,
+        "block_ms": null,
+        "alert_delay_ms": null,
+        "alerts": 0
+      },
+      "dormant": {
+        "login_denied": true,
+        "alert_delay_ms": null,
+        "alerts": 0
+      },
+      "exfil": {
+        "rows": 5250,
+        "exports_done": 5,
+        "blocked": false,
+        "final_status": "active",
+        "alert_delay_ms": null,
+        "alerts": 0
+      }
+    },
+    "on": {
+      "bulk": {
+        "rows": 300,
+        "blocked": true,
+        "block_request": 7,
+        "block_ms": 110,
+        "alert_delay_ms": 78,
+        "alerts": 2
+      },
+      "dormant": {
+        "login_denied": true,
+        "alert_delay_ms": 105,
+        "alerts": 2
+      },
+      "exfil": {
+        "rows": 1250,
+        "exports_done": 1,
+        "blocked": true,
+        "final_status": "locked",
+        "alert_delay_ms": 79,
+        "alerts": 1
+      }
+    }
+  },
+  "overhead": {
+    "off": {
+      "requests": 600,
+      "mean_ms": 13.42,
+      "p95_ms": 16.59
+    },
+    "on": {
+      "requests": 600,
+      "mean_ms": 13.31,
+      "p95_ms": 16.35
+    }
+  },
+  "false_positive": {
+    "days": 30,
+    "events": 23178,
+    "agent_days": 150,
+    "alerts": 1,
+    "by_rule": {
+      "R1": 1,
+      "R2": 0,
+      "R3": 0,
+      "R4": 0
+    },
+    "examples": [
+      "agent02 310건/10분"
+    ]
+  },
+  "evasion": [
+    {
+      "rate": 10,
+      "detected": false,
+      "minutes": null,
+      "rows_leaked": 4800
+    },
+    {
+      "rate": 20,
+      "detected": false,
+      "minutes": null,
+      "rows_leaked": 9600
+    },
+    {
+      "rate": 30,
+      "detected": true,
+      "minutes": 8.3,
+      "rows_leaked": 300
+    },
+    {
+      "rate": 60,
+      "detected": true,
+      "minutes": 4.2,
+      "rows_leaked": 300
+    },
+    {
+      "rate": 150,
+      "detected": true,
+      "minutes": 1.7,
+      "rows_leaked": 300
+    }
+  ],
+  "tradeoff": [
+    {
+      "threshold": 200,
+      "fp_alerts": 5,
+      "agent_days": 150,
+      "leak_at_60": 200,
+      "detected": true
+    },
+    {
+      "threshold": 300,
+      "fp_alerts": 1,
+      "agent_days": 150,
+      "leak_at_60": 300,
+      "detected": true
+    },
+    {
+      "threshold": 400,
+      "fp_alerts": 0,
+      "agent_days": 150,
+      "leak_at_60": 400,
+      "detected": true
+    },
+    {
+      "threshold": 500,
+      "fp_alerts": 0,
+      "agent_days": 150,
+      "leak_at_60": 500,
+      "detected": true
+    }
+  ]
+}

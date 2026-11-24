@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>보안 관제 대시보드</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --card:#fff; --text:#16181d; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#2563eb; --critical:#b91c1c; --high:#c2410c; --medium:#a16207; --ok:#15803d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1115; --card:#181b21; --text:#e8eaed; --muted:#9aa0a6; --line:#2a2e36;
+            --accent:#60a5fa; --critical:#f87171; --high:#fb923c; --medium:#facc15; --ok:#4ade80; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 -apple-system,"Segoe UI","Malgun Gothic",sans-serif; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 20px;
+           background:var(--card); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  h1 { font-size:17px; margin:0; }
+  .muted { color:var(--muted); font-size:12px; }
+  main { padding:16px 20px 40px; max-width:1200px; margin:0 auto; }
+  .grid { display:grid; gap:12px; }
+  .cards { grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); margin-bottom:12px; }
+  .two { grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); margin-bottom:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .card h2 { font-size:13px; margin:0 0 10px; color:var(--muted); font-weight:600; }
+  .big { font-size:28px; font-weight:700; }
+  .big.bad { color:var(--critical); }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; white-space:nowrap; }
+  .sev { font-weight:700; text-transform:uppercase; font-size:11px; }
+  .sev.critical { color:var(--critical); } .sev.high { color:var(--high); } .sev.medium { color:var(--medium); }
+  .detail { font-family:ui-monospace,Consolas,monospace; font-size:11px; color:var(--muted); word-break:break-all; }
+  .bars { display:flex; align-items:flex-end; gap:4px; height:150px; position:relative; border-bottom:1px solid var(--line); }
+  .bar { flex:1; background:var(--accent); border-radius:3px 3px 0 0; min-height:1px; position:relative; }
+  .bar.over { background:var(--critical); }
+  .axis { display:flex; gap:4px; margin-top:4px; }
+  .axis span { flex:1; text-align:center; font-size:10px; color:var(--muted); }
+  .hbar { display:flex; align-items:center; gap:8px; margin:5px 0; }
+  .hbar .name { width:110px; flex:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hbar .track { flex:1; background:var(--line); border-radius:4px; height:14px; }
+  .hbar .fill { height:100%; border-radius:4px; background:var(--accent); }
+  .hbar .num { width:48px; text-align:right; flex:none; }
+  button, input { font:inherit; padding:6px 10px; border-radius:6px; border:1px solid var(--line); background:var(--card); color:var(--text); }
+  button { cursor:pointer; } button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  #login { max-width:340px; margin:80px auto; }
+  #login form { display:grid; gap:10px; }
+  .err { color:var(--critical); min-height:18px; }
+  .hidden { display:none; }
+  .empty { color:var(--muted); padding:10px 0; }
+</style>
+</head>
+<body>
+
+<section id="login" class="card">
+  <h1>보안 관제 대시보드</h1>
+  <p class="muted">관리자(admin) 계정으로 로그인하세요. 로컬 모의 환경입니다.</p>
+  <form id="loginForm">
+    <input id="u" placeholder="아이디" autocomplete="username" required>
+    <input id="p" type="password" placeholder="비밀번호" autocomplete="current-password" required>
+    <button class="primary" type="submit">로그인</button>
+    <div class="err" id="loginErr"></div>
+  </form>
+</section>
+
+<div id="app" class="hidden">
+  <header>
+    <div>
+      <h1>보안 관제 대시보드</h1>
+      <div class="muted">내부자 정보유출 탐지·자동 대응 현황 · <span id="who"></span></div>
+    </div>
+    <div>
+      <span class="muted" id="updated"></span>
+      <label class="muted"><input type="checkbox" id="auto" checked> 3초 자동 갱신</label>
+      <button id="logout">로그아웃</button>
+    </div>
+  </header>
+  <main>
+    <div class="grid cards">
+      <div class="card"><h2>전체 경보</h2><div class="big" id="cAlerts">-</div></div>
+      <div class="card"><h2>high·critical 경보</h2><div class="big bad" id="cHigh">-</div></div>
+      <div class="card"><h2>잠금된 계정</h2><div class="big" id="cLocked">-</div></div>
+      <div class="card"><h2>최근 60분 조회 건수</h2><div class="big" id="cRows">-</div></div>
+    </div>
+
+    <div class="grid two">
+      <div class="card">
+        <h2>5분 단위 고객정보 조회량 (빨간색 = 10분 임계값의 절반 초과)</h2>
+        <div class="bars" id="bars"></div>
+        <div class="axis" id="axis"></div>
+      </div>
+      <div class="card">
+        <h2>사용자별 조회량 (최근 60분)</h2>
+        <div id="users"></div>
+        <h2 style="margin-top:14px">규칙별 경보 수</h2>
+        <div id="rules"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:12px">
+      <h2>최근 경보</h2>
+      <div style="overflow-x:auto"><table id="alerts"></table></div>
+    </div>
+
+    <div class="grid two">
+      <div class="card">
+        <h2>잠금된 계정 (자동 차단)</h2>
+        <div id="locked"></div>
+      </div>
+      <div class="card">
+        <h2>대응·인증 이벤트</h2>
+        <div style="overflow-x:auto"><table id="events"></table></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// 로그에는 공격자가 입력한 값(로그인 시도 아이디 등)이 들어갈 수 있으므로
+// 모든 동적 값은 반드시 esc()를 거쳐 화면에 넣는다 (저장형 XSS 방지).
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const $ = id => document.getElementById(id);
+let token = null, timer = null, me = "";
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {...opts, headers: {...(opts.headers || {}), Authorization: "Bearer " + token}});
+  if (r.status === 401 || r.status === 403) { logout("세션이 만료되었거나 권한이 없습니다."); throw new Error("auth"); }
+  return r;
+}
+
+$("loginForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("loginErr").textContent = "";
+  const r = await fetch("/auth/login", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({username: $("u").value, password: $("p").value})});
+  const j = await r.json();
+  if (!r.ok) { $("loginErr").textContent = j.detail || "로그인 실패"; return; }
+  if (j.role !== "admin") { $("loginErr").textContent = "관리자 계정만 사용할 수 있습니다."; return; }
+  token = j.access_token; me = $("u").value; $("p").value = "";
+  $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+  $("who").textContent = me;
+  refresh(); schedule();
+});
+
+function logout(msg) {
+  token = null; clearInterval(timer);
+  $("app").classList.add("hidden"); $("login").classList.remove("hidden");
+  $("loginErr").textContent = msg || "";
+}
+$("logout").onclick = () => logout();
+$("auto").onchange = schedule;
+function schedule() { clearInterval(timer); if ($("auto").checked) timer = setInterval(refresh, 3000); }
+
+async function refresh() {
+  if (!token) return;
+  const s = await (await api("/stats")).json();
+  render(s);
+}
+
+function render(s) {
+  $("cAlerts").textContent = s.totals.alerts;
+  $("cHigh").textContent = s.totals.alerts_high;
+  $("cLocked").textContent = s.totals.locked;
+  $("cRows").textContent = s.totals.rows_window.toLocaleString();
+  $("updated").textContent = "갱신 " + new Date(s.generated_at).toLocaleTimeString("ko-KR") + " ";
+
+  const max = Math.max(1, ...s.buckets.map(b => b.rows), s.threshold || 0);
+  const half = (s.threshold || 0) / 2;
+  $("bars").innerHTML = s.buckets.map(b =>
+    `<div class="bar ${b.rows > half ? "over" : ""}" style="height:${(b.rows / max) * 100}%" title="${esc(b.t)} · ${b.rows}건"></div>`).join("");
+  $("axis").innerHTML = s.buckets.map((b, i) => `<span>${i % 2 === 0 ? esc(b.t) : ""}</span>`).join("");
+
+  const umax = Math.max(1, ...s.top_users.map(u => u.rows));
+  $("users").innerHTML = s.top_users.length ? s.top_users.map(u =>
+    `<div class="hbar"><div class="name">${esc(u.username)}</div><div class="track"><div class="fill" style="width:${(u.rows / umax) * 100}%"></div></div><div class="num">${u.rows}</div></div>`).join("")
+    : `<div class="empty">조회 기록이 없습니다.</div>`;
+
+  const rmax = Math.max(1, ...s.by_rule.map(r => r.count));
+  $("rules").innerHTML = s.by_rule.length ? s.by_rule.map(r =>
+    `<div class="hbar"><div class="name">${esc(r.rule_id)} ${esc(r.rule_name)}</div><div class="track"><div class="fill" style="width:${(r.count / rmax) * 100}%;background:var(--${esc(r.severity)})"></div></div><div class="num">${r.count}</div></div>`).join("")
+    : `<div class="empty">경보가 없습니다.</div>`;
+
+  $("alerts").innerHTML = s.recent_alerts.length
+    ? `<tr><th>시각</th><th>심각도</th><th>규칙</th><th>계정</th><th>MITRE</th><th>근거</th></tr>` +
+      s.recent_alerts.map(a => `<tr><td>${esc(new Date(a.ts).toLocaleTimeString("ko-KR"))}</td><td><span class="sev ${esc(a.severity)}">${esc(a.severity)}</span></td><td>${esc(a.rule_id)} ${esc(a.rule_name)}</td><td>${esc(a.username ?? a.user_key)}</td><td>${esc(a.mitre)}</td><td class="detail">${esc(JSON.stringify(a.detail))}</td></tr>`).join("")
+    : `<tr><td class="empty">경보가 없습니다.</td></tr>`;
+
+  $("locked").innerHTML = s.locked_users.length
+    ? `<table>` + s.locked_users.map(u => `<tr><td>${esc(u.username)} <span class="muted">(${esc(u.role)})</span></td><td style="text-align:right"><button data-u="${esc(u.username)}">잠금 해제</button></td></tr>`).join("") + `</table>`
+    : `<div class="empty">잠금된 계정이 없습니다.</div>`;
+  document.querySelectorAll("#locked button").forEach(b => b.onclick = async () => {
+    await api(`/admin/users/${encodeURIComponent(b.dataset.u)}/unlock`, {method: "POST"});
+    refresh();
+  });
+
+  $("events").innerHTML = s.recent_events.length
+    ? `<tr><th>시각</th><th>이벤트</th><th>대상·내용</th></tr>` +
+      s.recent_events.map(e => `<tr><td>${esc(new Date(e.ts).toLocaleTimeString("ko-KR"))}</td><td>${esc(e.action)} <span class="muted">${esc(e.result)}</span></td><td class="detail">${esc([e.username, e.resource, e.detail].filter(Boolean).join(" · "))}</td></tr>`).join("")
+    : `<tr><td class="empty">이벤트가 없습니다.</td></tr>`;
+}
+</script>
+</body>
+</html>

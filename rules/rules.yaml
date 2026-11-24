@@ -1,0 +1,54 @@
+# 탐지 규칙 정의. 임계값은 이 파일에서 조정한다 (코드 수정 불필요).
+# 시간대는 한국 표준시(UTC+9) 기준으로 판단한다.
+utc_offset_hours: 9
+
+# 고객정보 접근으로 간주하는 동작 (result=ok 인 것만 집계)
+data_actions:
+  - customer.list
+  - customer.search
+  - customer.view
+  - customer.unmask
+  - customer.export
+
+rules:
+  - id: R1
+    name: 대량 조회
+    description: 짧은 시간 안에 조회한 고객 건수 합계가 임계값을 넘음 (쿠팡형 내부자 대량 조회)
+    type: volume
+    window_min: 10
+    threshold_rows: 300
+    cooldown_min: 30
+    severity: high
+    mitre: T1213
+
+  - id: R2
+    name: 비정상 시간대 접근
+    description: 심야·새벽(00:00~05:59 KST)에 고객정보에 접근
+    type: off_hours
+    start_hour: 0
+    end_hour: 6
+    cooldown_min: 1440
+    severity: medium
+    mitre: T1078
+
+  - id: R3
+    name: 휴면·퇴사·잠금 계정 접근
+    description: 비활성 상태 계정으로 로그인하거나 기존 토큰을 사용하려는 시도
+    type: inactive_account
+    actions: [auth.login, auth.token]
+    results: [denied]
+    detail_contains: ["status=dormant", "status=locked", "inactive account"]
+    cooldown_min: 60
+    severity: high
+    mitre: T1078
+
+  - id: R4
+    name: 대량 조회 후 외부 전송
+    description: 대량 조회 직후 내보내기를 실행 (롯데카드형 정보 반출 징후)
+    type: bulk_then_export
+    export_action: customer.export
+    lookback_min: 30
+    min_rows: 200
+    cooldown_min: 60
+    severity: critical
+    mitre: T1048
