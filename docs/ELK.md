@@ -40,6 +40,8 @@ docker compose up --build
 | defense_offhours_data_access.yml | R2 | `local_hour` 필드 필요 (Filebeat가 계산), 테스트로 검증 |
 | defense_bulk_access_correlation.yml | R1 근사 | Sigma 상관 규칙은 합계를 세지 못해 "50건 이상 조회 6회/10분"으로 근사 |
 | defense_bulk_then_export_correlation.yml | R4 근사 | 대량 조회 후 30분 내 내보내기 (`temporal_ordered`) |
+| defense_daily_cumulative_correlation.yml | R5·R6 근사 | 50건 이상 조회 24회(경고)·40회(차단) / 24시간. 50건 단위 조회에서 엔진 발동 시점과 일치함을 테스트로 확인 |
+| defense_export_preblock.yml | R7 | 사전 차단 이벤트 하나로 매칭, 탐지 엔진과 결과 일치를 테스트로 확인 |
 
 정확한 기준은 `rules/rules.yaml`입니다. Sigma 파일은 SIEM 간 이식을 위한 표현이며, 변환·실행 도구(pySigma 등)로 실제 쿼리를 만들어 돌려 본 것은 아닙니다.
 

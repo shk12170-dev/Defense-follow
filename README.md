@@ -44,6 +44,21 @@
 
 규칙은 [rules/rules.yaml](rules/rules.yaml)에서 조정하며, 규칙마다 MITRE ATT&CK 기법 번호를 붙였습니다.
 
+### Sigma 규칙 (SIEM 간 이식용, [sigma/](sigma/))
+R1~R7 모두 Sigma 형식으로도 제공합니다. 정확한 기준은 `rules/rules.yaml`이며, 합계(`rows`)를 셀 수 없는 Sigma의 한계 때문에 일부는 근사입니다.
+
+| 규칙 | Sigma 파일 | 표현 | 검증 |
+|---|---|---|---|
+| R1 | defense_bulk_access_correlation.yml | 근사: 50건 이상 조회 6회/10분 | 구조 검증 |
+| R2 | defense_offhours_data_access.yml | 정확 (`local_hour` 필드 필요) | 엔진과 탐지 결과 일치 확인 |
+| R3 | defense_inactive_account_access.yml | 정확 | 엔진과 탐지 결과 일치 확인 |
+| R4 | defense_bulk_then_export_correlation.yml | 근사: 대량 조회 후 30분 내 내보내기 | 구조 검증 |
+| R5 | defense_daily_cumulative_correlation.yml | 근사: 50건 이상 조회 24회/24시간 (≈1,200건) | 50건 단위 조회에서 엔진 발동 시점과 일치 확인 |
+| R6 | defense_daily_cumulative_correlation.yml | 근사: 50건 이상 조회 40회/24시간 (≈2,000건) | 50건 단위 조회에서 엔진 발동 시점과 일치 확인 |
+| R7 | defense_export_preblock.yml | 정확: 차단 이벤트 하나로 매칭 | 엔진과 탐지 결과 일치 확인 |
+
+pySigma 등 변환 도구로 실제 쿼리를 만들어 SIEM에서 돌려 본 것은 아닙니다 (형식·논리 검증만 했습니다).
+
 ## 빠른 시작 (Windows PowerShell, Python 3.12)
 ```powershell
 python -m venv .venv
@@ -113,6 +128,6 @@ docs/         보고서, 플레이북, 비교 결과, 스크린샷
 - 더 느린 공격: 하루 1,200건 미만은 아직 못 잡습니다 → 주간 누적, 사용자별 평소 패턴(기준선, UEBA) 대비 탐지
 - 오탐 완화: R1 잠금 오탐(0.67%)이 남아 있습니다 → 잠금 전 관리자 확인, 추가 인증 단계
 - 조회 사전 차단: 내보내기는 사전 차단하지만, 조회는 R1 임계값(300건)까지는 확보할 수 있습니다
-- R5~R7은 Sigma·Kibana 설정에 아직 반영하지 않았습니다 (R1~R4만 반영)
+- R5~R7은 Kibana 저장된 검색·대시보드에 아직 반영하지 않았습니다 (R1~R4만 반영, Sigma는 R1~R7 모두 작성)
 - ELK·Docker Compose는 실제 기동까지 확인했습니다. Sigma 규칙은 변환·실행 도구로 돌려 보지는 않았습니다 ([docs/ELK.md](docs/ELK.md) 참고)
 - 측정은 합성 로그와 단일 PC 인프로세스 기준이며, 실제 업무 패턴과 네트워크 지연은 반영하지 않았습니다.

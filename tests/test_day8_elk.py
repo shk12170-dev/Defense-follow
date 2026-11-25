@@ -257,3 +257,62 @@ def test_sigma_matches_same_events_as_detector(fname, rule_id):
         if sigma_hit != engine_hit:
             mismatches.append((ev["action"], ev["result"], ev["detail"], enrich(ev)["local_hour"], sigma_hit, engine_hit))
     assert not mismatches, mismatches
+
+
+# ---------- R5~R7 Sigma (2차 보완) ----------
+def sigma_by_title(title):
+    for _f, d in sigma_docs():
+        if d["title"].startswith(title):
+            return d
+    raise AssertionError(title)
+
+
+def test_sigma_r7_matches_same_events_as_detector():
+    """R7: 사전 차단 이벤트 하나로 매칭. 탐지 엔진의 R7과 같은 이벤트를 잡는지 비교한다."""
+    rule = yaml.safe_load((ROOT / "sigma" / "defense_export_preblock.yml").read_text(encoding="utf-8"))
+    t = datetime(2026, 11, 10, 15, 0, tzinfo=KST)
+    cases = [
+        make_ev(t, "customer.export", "blocked", "pre-block: 250건 조회 후 30분 이내 내보내기 시도", rows=0, user="admin01"),
+        make_ev(t, "customer.export", "ok", None, rows=100, user="admin01"),
+        make_ev(t, "customer.export", "denied", "reason missing", rows=0, user="admin01"),
+        make_ev(t, "customer.export", "blocked", "other reason", rows=0, user="admin01"),
+        make_ev(t, "customer.list", "blocked", "pre-block: x", rows=0, user="admin01"),
+    ]
+    got = [(match_sigma(rule, enrich(e)), any(a.rule_id == "R7" for a in Detector().feed(e))) for e in cases]
+    assert [g[0] for g in got] == [g[1] for g in got] == [True, False, False, False, False]
+
+
+def test_sigma_daily_thresholds_match_engine_for_50_row_pages():
+    """R5·R6 근사 검증: 50건씩 조회하는 공격에서, Sigma의 횟수 기준이 엔진 발동 시점(몇 번째 조회)과 일치한다."""
+    r5 = sigma_by_title("Daily Cumulative Customer Reads - Warning")["correlation"]
+    r6 = sigma_by_title("Daily Cumulative Customer Reads - Block")["correlation"]
+    assert r5["type"] == r6["type"] == "event_count" and r5["timespan"] == r6["timespan"] == "1d"
+    assert r5["group-by"] == r6["group-by"] == ["username"]
+    start = datetime(2026, 11, 10, 14, 0, tzinfo=KST)
+    d = Detector()
+    fired = {}
+    for i in range(60):  # 분당 10건 속도(5분 간격 50건) -> R1은 걸리지 않는다
+        for a in d.feed(make_ev(start + timedelta(minutes=5 * i), "customer.list", rows=50, user="insider01")):
+            fired.setdefault(a.rule_id, i + 1)
+    assert fired == {"R5": r5["condition"]["gte"], "R6": r6["condition"]["gte"]}  # 24번째, 40번째 조회
+
+
+def test_sigma_daily_base_rule_selects_large_reads_only():
+    base = next(d for _f, d in sigma_docs() if d.get("name") == "defense_customer_page_read_daily")
+    t = datetime(2026, 11, 10, 14, 0, tzinfo=KST)
+    assert match_sigma(base, enrich(make_ev(t, "customer.list", rows=50)))
+    assert not match_sigma(base, enrich(make_ev(t, "customer.list", rows=49)))
+    assert not match_sigma(base, enrich(make_ev(t, "customer.list", result="denied", rows=50)))
+
+
+def test_sigma_levels_match_engine_severities():
+    """Sigma level이 규칙 파일의 심각도와 일치하는지 확인한다."""
+    cfg = load("rules/rules.yaml")
+    sev = {r["id"]: r["severity"] for r in cfg["rules"]}
+    pairs = {
+        "Daily Cumulative Customer Reads - Warning": "R5",
+        "Daily Cumulative Customer Reads - Block": "R6",
+        "Customer Export Blocked After Bulk Read": "R7",
+    }
+    for title, rid in pairs.items():
+        assert sigma_by_title(title)["level"] == sev[rid], (title, rid)

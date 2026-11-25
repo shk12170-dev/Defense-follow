@@ -1,0 +1,71 @@
+# 규칙 R5(일일 누적 조회 경고)와 R6(일일 누적 조회 차단)의 Sigma 상관(correlation) 표현.
+# 주의: Sigma 상관 규칙은 이벤트 개수를 셀 수 있지만 rows 필드의 합계는 표현하지 못한다.
+# 여기서는 '한 번에 50건 이상 조회'를 한 번의 이벤트로 보고, 24시간 안의 횟수로 근사했다.
+#   R5: 1,200건 / 50 = 24회 이상, R6: 2,000건 / 50 = 40회 이상
+# 요청당 50건(서버 조회 상한)으로 조회하는 저속 공격에서는 탐지 엔진과 같은 시점에 발동한다.
+# 50건 미만씩 여러 번 조회한 분량은 세지 못하므로 정확한 기준은 rules/rules.yaml의 R5·R6(threshold_rows)이 기준이다.
+title: Customer Page Read With 50 Or More Rows (Daily Count)
+id: 8a4d2f69-5c13-4e87-b0a6-2d9e7c1f4909
+name: defense_customer_page_read_daily
+status: experimental
+description: 한 번의 요청으로 50건 이상의 고객 정보를 조회
+author: Defense-follow
+date: 2026-11-25
+logsource:
+  product: defense_follow
+  service: audit
+detection:
+  selection:
+    action|startswith: 'customer.'
+    result: ok
+    rows|gte: 50
+  condition: selection
+level: informational
+---
+title: Daily Cumulative Customer Reads - Warning (Approximation Of R5)
+id: 6b1e9d34-7a25-4c80-8f3d-9e4a2c6b1010
+status: experimental
+description: >
+  한 계정이 24시간 안에 50건 이상 조회를 24회 이상 수행 (R5 근사, 1단계 경고).
+  계정은 잠그지 않고 담당자에게 알린다.
+author: Defense-follow
+date: 2026-11-25
+tags:
+  - attack.collection
+  - attack.t1213
+correlation:
+  type: event_count
+  rules:
+    - defense_customer_page_read_daily
+  group-by:
+    - username
+  timespan: 1d
+  condition:
+    gte: 24
+falsepositives:
+  - 업무량이 많은 날의 정상 상담원 (탐지 엔진의 R5는 합성 정상 업무 30일에서 상담원·일의 약 4.7%. 이 Sigma 근사 규칙의 비율은 따로 측정하지 않았다)
+level: medium
+---
+title: Daily Cumulative Customer Reads - Block (Approximation Of R6)
+id: 2c5f8a71-3d96-4b14-a7e2-5f1b8d3e2111
+status: experimental
+description: >
+  한 계정이 24시간 안에 50건 이상 조회를 40회 이상 수행 (R6 근사, 2단계 차단).
+  저속으로 천천히 빼가는 내부자를 잡기 위한 규칙이며, 탐지 엔진은 계정을 자동 잠금한다.
+author: Defense-follow
+date: 2026-11-25
+tags:
+  - attack.collection
+  - attack.t1213
+correlation:
+  type: event_count
+  rules:
+    - defense_customer_page_read_daily
+  group-by:
+    - username
+  timespan: 1d
+  condition:
+    gte: 40
+falsepositives:
+  - 일회성 대규모 정상 업무 (예: 마감 작업)
+level: high

@@ -1,0 +1,28 @@
+title: Customer Export Blocked After Bulk Read
+id: 3e7a1c58-4b92-4d06-9a1f-8c2b5d7e9808
+status: experimental
+description: >
+  대량 조회 직후의 내보내기를 서버가 실행 전에 거부한 사건 (규칙 R7).
+  서버가 판단 결과(result: blocked, detail에 pre-block)를 로그에 남기므로 이벤트 하나로 매칭한다.
+  반출은 이미 막혔고 계정은 잠그지 않으므로, 보안 담당자가 조회 내역과 사유를 확인해 후속 조치를 정한다.
+author: Defense-follow
+date: 2026-11-25
+tags:
+  - attack.exfiltration
+  - attack.t1048
+logsource:
+  product: defense_follow
+  service: audit
+detection:
+  selection:
+    action: customer.export
+    result: blocked
+    detail|contains: 'pre-block'
+  condition: selection
+fields:
+  - username
+  - detail
+  - ip
+falsepositives:
+  - 정당한 대량 조회 후 보고용 내보내기를 시도한 관리자
+level: critical
