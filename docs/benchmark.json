@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-25 07:53 KST",
+  "generated": "2026-11-25 20:56 KST",
   "customers": 4000,
   "scenarios": {
     "off": {
@@ -30,21 +30,21 @@
         "rows": 300,
         "blocked": true,
         "block_request": 7,
-        "block_ms": 110,
-        "alert_delay_ms": 78,
+        "block_ms": 103,
+        "alert_delay_ms": 83,
         "alerts": 2
       },
       "dormant": {
         "login_denied": true,
-        "alert_delay_ms": 105,
+        "alert_delay_ms": 110,
         "alerts": 2
       },
       "exfil": {
-        "rows": 1250,
-        "exports_done": 1,
+        "rows": 250,
+        "exports_done": 0,
         "blocked": true,
-        "final_status": "locked",
-        "alert_delay_ms": 79,
+        "final_status": "active",
+        "alert_delay_ms": 84,
         "alerts": 1
       }
     }
@@ -52,87 +52,148 @@
   "overhead": {
     "off": {
       "requests": 600,
-      "mean_ms": 13.42,
-      "p95_ms": 16.59
+      "mean_ms": 13.62,
+      "p95_ms": 17.33
     },
     "on": {
       "requests": 600,
-      "mean_ms": 13.31,
-      "p95_ms": 16.35
+      "mean_ms": 13.86,
+      "p95_ms": 18.29
     }
   },
   "false_positive": {
     "days": 30,
     "events": 23178,
     "agent_days": 150,
-    "alerts": 1,
+    "alerts": 8,
+    "locks": 1,
+    "warns": 7,
     "by_rule": {
       "R1": 1,
       "R2": 0,
       "R3": 0,
-      "R4": 0
+      "R4": 0,
+      "R5": 7,
+      "R6": 0,
+      "R7": 0
     },
     "examples": [
-      "agent02 310건/10분"
+      "R5 agent02 1200건",
+      "R5 agent01 1203건",
+      "R5 agent05 1201건"
     ]
   },
   "evasion": [
     {
+      "rate": 3,
+      "total_rows": 1450,
+      "warn_rule": "R5",
+      "warn_min": 383.3,
+      "warn_rows": 1200,
+      "lock_rule": null,
+      "lock_min": null,
+      "lock_rows": null,
+      "rows_leaked": 1450,
+      "detected": false
+    },
+    {
+      "rate": 5,
+      "total_rows": 2400,
+      "warn_rule": "R5",
+      "warn_min": 230.0,
+      "warn_rows": 1200,
+      "lock_rule": "R6",
+      "lock_min": 390.0,
+      "lock_rows": 2000,
+      "rows_leaked": 2000,
+      "detected": true
+    },
+    {
       "rate": 10,
-      "detected": false,
-      "minutes": null,
-      "rows_leaked": 4800
+      "total_rows": 4800,
+      "warn_rule": "R5",
+      "warn_min": 115.0,
+      "warn_rows": 1200,
+      "lock_rule": "R6",
+      "lock_min": 195.0,
+      "lock_rows": 2000,
+      "rows_leaked": 2000,
+      "detected": true
     },
     {
       "rate": 20,
-      "detected": false,
-      "minutes": null,
-      "rows_leaked": 9600
+      "total_rows": 9600,
+      "warn_rule": "R5",
+      "warn_min": 57.5,
+      "warn_rows": 1200,
+      "lock_rule": "R6",
+      "lock_min": 97.5,
+      "lock_rows": 2000,
+      "rows_leaked": 2000,
+      "detected": true
     },
     {
       "rate": 30,
-      "detected": true,
-      "minutes": 8.3,
-      "rows_leaked": 300
+      "total_rows": 14400,
+      "warn_rule": "R5",
+      "warn_min": 38.3,
+      "warn_rows": 1200,
+      "lock_rule": "R1",
+      "lock_min": 8.3,
+      "lock_rows": 300,
+      "rows_leaked": 300,
+      "detected": true
     },
     {
       "rate": 60,
-      "detected": true,
-      "minutes": 4.2,
-      "rows_leaked": 300
+      "total_rows": 28800,
+      "warn_rule": "R5",
+      "warn_min": 19.2,
+      "warn_rows": 1200,
+      "lock_rule": "R1",
+      "lock_min": 4.2,
+      "lock_rows": 300,
+      "rows_leaked": 300,
+      "detected": true
     },
     {
       "rate": 150,
-      "detected": true,
-      "minutes": 1.7,
-      "rows_leaked": 300
+      "total_rows": 72000,
+      "warn_rule": "R5",
+      "warn_min": 7.7,
+      "warn_rows": 1200,
+      "lock_rule": "R1",
+      "lock_min": 1.7,
+      "lock_rows": 300,
+      "rows_leaked": 300,
+      "detected": true
     }
   ],
   "tradeoff": [
     {
       "threshold": 200,
-      "fp_alerts": 5,
+      "fp_locks": 5,
       "agent_days": 150,
       "leak_at_60": 200,
       "detected": true
     },
     {
       "threshold": 300,
-      "fp_alerts": 1,
+      "fp_locks": 1,
       "agent_days": 150,
       "leak_at_60": 300,
       "detected": true
     },
     {
       "threshold": 400,
-      "fp_alerts": 0,
+      "fp_locks": 0,
       "agent_days": 150,
       "leak_at_60": 400,
       "detected": true
     },
     {
       "threshold": 500,
-      "fp_alerts": 0,
+      "fp_locks": 0,
       "agent_days": 150,
       "leak_at_60": 500,
       "detected": true

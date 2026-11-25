@@ -120,9 +120,12 @@ def scenario_exfil(c):
             blocked = True
             break
     status = db_rows("SELECT status FROM users WHERE username='admin01'")[0]["status"]
+    delay = first_alert_delay_ms("R7", t_start)
+    if delay is None:
+        delay = first_alert_delay_ms("R4", t_start)
     return {"rows": rows, "exports_done": exports, "blocked": blocked, "final_status": status,
-            "alert_delay_ms": first_alert_delay_ms("R4", t_start),
-            "alerts": len(db_rows("SELECT 1 FROM alerts WHERE rule_id='R4'"))}
+            "alert_delay_ms": delay,
+            "alerts": len(db_rows("SELECT 1 FROM alerts WHERE rule_id IN ('R4','R7')"))}
 
 
 def run_scenarios(mode, n_customers):
@@ -189,33 +192,49 @@ def run_false_positive(days=30, seed=7, threshold=300):
         events.append(ev(t, "admin01", "customer.view", 1))
         events.append(ev(t + timedelta(minutes=30), "admin01", "customer.export", 100))
     alerts = _detector(threshold).run(events)
+    locks = [a for a in alerts if _is_lock(a)]
     return {"days": days, "events": len(events), "agent_days": days * 5, "alerts": len(alerts),
-            "by_rule": {r: sum(1 for a in alerts if a.rule_id == r) for r in ("R1", "R2", "R3", "R4")},
-            "examples": [f"{a.user_key} {a.detail.get('rows_in_window')}건/10분" for a in alerts[:3]]}
+            "locks": len(locks), "warns": len(alerts) - len(locks),
+            "by_rule": {r: sum(1 for a in alerts if a.rule_id == r) for r in ("R1", "R2", "R3", "R4", "R5", "R6", "R7")},
+            "examples": [f"{a.rule_id} {a.user_key} {a.detail.get('rows_in_window')}건" for a in alerts[:3]]}
 
 
 # ---------------- 4. 회피 (저속 공격) ----------------
-def run_evasion(threshold=300, rates=(10, 20, 30, 60, 150)):
+def _is_lock(alert):
+    """경보가 계정 잠금으로 이어지는지 (규칙의 lock 값이 없으면 심각도로 판단)."""
+    if alert.lock is not None:
+        return alert.lock
+    return alert.severity in ("high", "critical")
+
+
+def run_evasion(threshold=300, rates=(3, 5, 10, 20, 30, 60, 150), hours=8):
     out = []
+    start = datetime(2026, 11, 10, 14, 0, tzinfo=KST)
     for rate in rates:  # 분당 조회 건수
         step = 50 / rate  # 50건씩 가져오는 간격(분)
-        start = datetime(2026, 11, 10, 14, 0, tzinfo=KST)
         events, t = [], start
-        while t < start + timedelta(hours=8):
+        while t < start + timedelta(hours=hours):
             events.append({"ts": t.astimezone(timezone.utc).isoformat(), "username": "insider01",
                            "action": "customer.list", "result": "ok", "rows": 50, "detail": None,
                            "ip": "10.0.0.9", "resource": None})
             t += timedelta(minutes=step)
-        alerts = [a for a in _detector(threshold).run(events) if a.rule_id == "R1"]
+        alerts = _detector(threshold).run(events)
         total = len(events) * 50
-        if alerts:
-            first = datetime.fromisoformat(alerts[0].ts)
-            n_before = sum(1 for e in events if datetime.fromisoformat(e["ts"]) <= first)
-            out.append({"rate": rate, "detected": True,
-                        "minutes": round((first - start.astimezone(timezone.utc)).total_seconds() / 60, 1),
-                        "rows_leaked": n_before * 50})
-        else:
-            out.append({"rate": rate, "detected": False, "minutes": None, "rows_leaked": total})
+
+        def at(alert):
+            if alert is None:
+                return None, None
+            first = datetime.fromisoformat(alert.ts)
+            n = sum(1 for e in events if datetime.fromisoformat(e["ts"]) <= first)
+            return round((first - start.astimezone(timezone.utc)).total_seconds() / 60, 1), n * 50
+
+        warn = next((a for a in alerts if not _is_lock(a)), None)
+        lock = next((a for a in alerts if _is_lock(a)), None)
+        (wm, wr), (lm, lr) = at(warn), at(lock)
+        out.append({"rate": rate, "total_rows": total, "warn_rule": warn.rule_id if warn else None,
+                    "warn_min": wm, "warn_rows": wr, "lock_rule": lock.rule_id if lock else None,
+                    "lock_min": lm, "lock_rows": lr, "rows_leaked": lr if lock else total,
+                    "detected": lock is not None})
     return out
 
 
@@ -225,7 +244,7 @@ def run_tradeoff(thresholds=(200, 300, 400, 500)):
     for thr in thresholds:
         fp = run_false_positive(threshold=thr)
         leak = run_evasion(threshold=thr, rates=(60,))[0]
-        out.append({"threshold": thr, "fp_alerts": fp["alerts"], "agent_days": fp["agent_days"],
+        out.append({"threshold": thr, "fp_locks": fp["locks"], "agent_days": fp["agent_days"],
                     "leak_at_60": leak["rows_leaked"], "detected": leak["detected"]})
     return out
 
@@ -258,6 +277,7 @@ def build_sections(res):
     s4 = [
         ["반출된 고객 정보 건수 (조회 250 + 내보내기)", fmt(off["exfil"]["rows"], "건"), fmt(on["exfil"]["rows"], "건")],
         ["성공한 내보내기 횟수 (시도 5회)", fmt(off["exfil"]["exports_done"], "회"), fmt(on["exfil"]["exports_done"], "회")],
+        ["내보내기 사전 차단", fmt(off["exfil"]["blocked"]), fmt(on["exfil"]["blocked"])],
         ["계정 최종 상태", off["exfil"]["final_status"], on["exfil"]["final_status"]],
         ["첫 경보까지 걸린 시간", fmt(off["exfil"]["alert_delay_ms"], "ms"), fmt(on["exfil"]["alert_delay_ms"], "ms")],
     ]
@@ -268,34 +288,53 @@ def build_sections(res):
         ["측정 요청 수", fmt(ov["off"]["requests"], "건"), fmt(ov["on"]["requests"], "건")],
     ]
     fp = res["false_positive"]
-    rate = fp["alerts"] / fp["agent_days"] * 100
+    rate = fp["locks"] / fp["agent_days"] * 100
     fp_rows = [[f"합성 업무일 {fp['days']}일 (이벤트 {fp['events']:,}건, 상담원 {fp['agent_days']}명·일)",
-                f"오탐 {fp['alerts']}건 ({rate:.2f}%)",
-                ", ".join(f"{k}:{v}" for k, v in fp["by_rule"].items()) +
-                (" · " + "; ".join(fp["examples"]) if fp["examples"] else "")]]
-    to_rows = [[f"{t['threshold']}건/10분", f"{t['fp_alerts']}건 ({t['fp_alerts'] / t['agent_days'] * 100:.2f}%)",
-                fmt(t["leak_at_60"], "건") if t["detected"] else "탐지 못함"] for t in res["tradeoff"]]
-    ev_rows = [[f"{e['rate']}건/분", "탐지" if e["detected"] else "**탐지 못함**",
-                fmt(e["minutes"], "분") if e["detected"] else "-", fmt(e["rows_leaked"], "건")]
-               for e in res["evasion"]]
+                f"계정 잠금 {fp['locks']}건 ({rate:.2f}%), 경고 {fp['warns']}건",
+                ", ".join(f"{k}:{v}" for k, v in fp["by_rule"].items() if v) or "경보 없음"]]
+    to_rows = [[f"{t['threshold']}건/10분", f"{t['fp_locks']}건 ({t['fp_locks'] / t['agent_days'] * 100:.2f}%)",
+                fmt(t["leak_at_60"], "건") if t["detected"] else "차단 못함"] for t in res["tradeoff"]]
+
+    def warn_txt(e):
+        return f"{e['warn_rule']} · {e['warn_min']}분 후 ({e['warn_rows']:,}건)" if e["warn_rule"] else "없음"
+
+    def lock_txt(e):
+        return f"{e['lock_rule']} · {e['lock_min']}분 후" if e["lock_rule"] else "**차단 못함**"
+
+    ev_rows = [[f"{e['rate']}건/분", warn_txt(e), lock_txt(e), fmt(e["rows_leaked"], "건")] for e in res["evasion"]]
+
+    ev = {e["rate"]: e for e in res["evasion"]}
+    # 1차 구현(2026-11-25 07:53 KST 측정)의 값. 같은 시나리오·같은 측정 방식의 이전 결과다.
+    imp = [
+        ["시나리오 4: 반출된 건수 (방어 ON)", "1,250건", fmt(on["exfil"]["rows"], "건")],
+        ["시나리오 4: 성공한 내보내기", "1회 (1,000건 유출 후 계정 잠금)", fmt(on["exfil"]["exports_done"], "회")],
+    ]
+    for rate_ in (10, 20):
+        if rate_ in ev:
+            old = {10: "4,800건 (차단 못함)", 20: "9,600건 (차단 못함)"}[rate_]
+            imp.append([f"분당 {rate_}건 저속 공격 8시간 유출", old,
+                        f"{ev[rate_]['rows_leaked']:,}건 ({lock_txt(ev[rate_]).replace('**', '')})"])
+    imp.append(["정상 업무 오탐으로 인한 계정 잠금", "1건 (0.67%)", f"{fp['locks']}건 ({rate:.2f}%), 경고 {fp['warns']}건"])
     return [
         ("시나리오 1: 상담원 대량 조회 (R1, 쿠팡형)", ["지표", "방어 OFF", "방어 ON"], s1),
         ("시나리오 3: 퇴사자·휴면 계정 접근 (R3)", ["지표", "방어 OFF", "방어 ON"], s3),
-        ("시나리오 4: 대량 조회 후 외부 반출 (R4, 롯데카드형)", ["지표", "방어 OFF", "방어 ON"], s4),
+        ("시나리오 4: 대량 조회 후 외부 반출 (R4·R7, 롯데카드형)", ["지표", "방어 OFF", "방어 ON"], s4),
         ("성능 오버헤드 (정상 요청)", ["지표", "방어 OFF", "방어 ON"], overhead),
-        ("오탐 평가 (R1 임계값 300건/10분)", ["대상", "결과", "규칙별·내용"], fp_rows),
-        ("임계값 조정: 오탐 대 유출 (R1)", ["R1 임계값", "정상 업무 오탐", "분당 60건 공격 시 유출"], to_rows),
-        ("회피 분석: 공격자가 속도를 늦추면 (8시간 지속, R1 기준)", ["조회 속도", "탐지", "탐지까지", "유출 건수"], ev_rows),
+        ("2차 보완 전후 비교 (누적 조회량·단계적 대응·반출 사전 차단)", ["항목", "1차 구현", "2차 보완"], imp),
+        ("오탐 평가 (R1 임계값 300건/10분)", ["대상", "결과", "규칙별"], fp_rows),
+        ("임계값 조정: 오탐 대 유출 (R1)", ["R1 임계값", "정상 업무로 인한 잠금", "분당 60건 공격 시 유출"], to_rows),
+        ("저속 공격 분석 (8시간 지속, R1·R5·R6 적용)", ["조회 속도", "1단계 경고", "2단계 차단(잠금)", "유출 건수"], ev_rows),
     ]
 
 
 NOTES = [
-    "RBAC·마스킹·조회 상한(페이지당 50건)은 두 모드 모두 켜져 있다. 비교 대상은 실시간 탐지와 자동 차단이다.",
-    "경보는 문제가 된 요청이 서버에서 처리되는 시점에 발생한다. 그 요청의 응답은 이미 나가므로, 차단은 다음 요청부터 적용된다. 시나리오 4의 첫 내보내기(1,000건)는 막지 못한다.",
+    "RBAC·마스킹·조회 상한(페이지당 50건)은 두 모드 모두 켜져 있다. 비교 대상은 실시간 탐지, 자동 차단, 반출 사전 차단이다.",
+    "조회에 대한 경보는 요청 처리 시점에 발생하고 잠금은 다음 요청부터 적용되므로, R1 임계값(300건)까지는 확보할 수 있다. 내보내기는 직전 조회량을 검사해 실행 전에 거부한다(사전 차단).",
+    "R7(내보내기 사전 차단)은 반출만 막고 계정은 잠그지 않는다(보안 담당자 확인 요청). 조회를 직전 30분 200건 미만으로 나눠 읽은 뒤 내보내면 R7을 피할 수 있으며, 이는 일일 누적 규칙(R5·R6)이 보완한다.",
     "참고: 롯데카드 사고는 침해 인지까지 17일이 걸렸다는 보도가 있다(언론 보도 기준). 이 모의 시스템의 경보는 같은 요청 안에서 발생한다.",
-    "오탐 평가는 무작위로 만든 합성 로그이며 실제 업무 패턴 검증이 아니다. 오탐이 나면 정상 상담원 계정이 잠기므로 운영 부담이 된다. 운영 적용 전에는 실제 로그로 임계값을 조정하고, 잠금 전 관리자 확인 단계를 두는 방안을 검토해야 한다.",
-    "임계값을 올리면 오탐은 줄지만 공격 시 유출되는 건수가 늘어난다. 둘 사이의 균형이 규칙 튜닝의 핵심이다.",
-    "회피 분석: 분당 조회량이 임계값(10분 300건 = 분당 30건) 미만이면 R1은 탐지하지 못한다. 하루 누적 조회량 규칙을 추가해 보완해야 한다 (향후 과제).",
+    "오탐 평가는 무작위로 만든 합성 로그이며 실제 업무 패턴 검증이 아니다. 오탐으로 잠기면 정상 상담원이 업무를 못 하므로, 운영 적용 전에는 실제 로그로 임계값을 조정해야 한다. 경고 단계(R5)는 계정을 잠그지 않는다.",
+    "임계값을 올리면 잠금 오탐은 줄지만 공격 시 유출되는 건수가 늘어난다. 둘 사이의 균형이 규칙 튜닝의 핵심이다.",
+    "저속 공격: 하루 누적 1,200건(경고)·2,000건(차단) 미만이면 여전히 탐지하지 못한다(분당 약 2.5건 이하로 8시간). 사용자별 평소 패턴(기준선) 대비 탐지는 향후 과제다.",
     "측정은 단일 PC의 인프로세스 테스트 클라이언트 기준이라 네트워크 지연은 포함하지 않는다. 시간 값은 실행마다 다소 달라진다.",
 ]
 

@@ -115,6 +115,13 @@ def export_customers(
         db.commit()
         raise HTTPException(400, "내보내기 사유(5자 이상)가 필요합니다")
     limit = min(limit, EXPORT_MAX)
+    risk = response.pre_export_check(db, user)
+    if risk:  # 대량 조회 직후의 내보내기는 실행하지 않고 거부한다 (사후 차단이 아닌 사전 차단)
+        write_audit(db, user, "customer.export", f"limit={limit}",
+                    f"pre-block: {risk['rows_before']}건 조회 후 {risk['lookback_min']}분 이내 내보내기 시도",
+                    ip, "blocked")
+        db.commit()
+        raise HTTPException(403, "대량 조회 직후의 내보내기는 차단되었습니다. 보안 담당자에게 문의하세요")
     rows = db.execute("SELECT * FROM customers ORDER BY id LIMIT ?", (limit,)).fetchall()
     write_audit(db, user, "customer.export", f"limit={limit}", f"reason={reason.strip()}", ip, "ok", len(rows))
     return {"count": len(rows), "items": [masking.masked(r) for r in rows]}

@@ -78,16 +78,17 @@ def s3_dormant(sim):
 
 
 def s4_exfil(sim):
-    print("\n=== 시나리오 4: 대량 조회 후 외부 반출 (R4, 롯데카드형) ===")
+    print("\n=== 시나리오 4: 대량 조회 후 외부 반출 (R4·R7, 롯데카드형) ===")
     sim.reset_accounts(["admin01"])
     _, h = sim.login("admin01")
     for page in range(1, 6):
         r = sim.c.get(f"/customers?page={page}&size=50", headers=h)
         sim.log(f"조회 페이지 {page}: HTTP {r.status_code}")
     r = sim.c.get("/customers/export?limit=100&reason=월간 점검용 반출", headers=h)
-    sim.log(f"내보내기: HTTP {r.status_code}")
+    verdict = "사전 차단됨 (데이터 반환 없음)" if r.status_code == 403 else "반출 성공"
+    sim.log(f"내보내기: HTTP {r.status_code} -> {verdict}")
     r = sim.c.get("/customers?page=1&size=50", headers=h)
-    sim.log(f"반출 직후 재접속: HTTP {r.status_code} ({r.json().get('detail')})")
+    sim.log(f"이어서 조회: HTTP {r.status_code} ({r.json().get('detail', '응답 완료 - 누적 조회량에 따른 경보·잠금은 대시보드에서 확인')})")
 
 
 def main():

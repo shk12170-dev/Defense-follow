@@ -57,15 +57,21 @@ def test_alert_saved_and_lock_audited(client):
     assert locks and "R1" in locks[0]["detail"]
 
 
-def test_exfiltration_locks_admin(client):
+def test_exfiltration_is_blocked_before_it_happens(client):
+    """2차 보완: 대량 조회 직후 내보내기는 실행되지 않고 거부된다 (이전에는 실행 후 계정 잠금)."""
     h = tok(client, "admin01")
     for p in range(1, 6):
-        client.get(f"/customers?page={p}&size=50", headers=h)
-    assert client.get("/customers/export?limit=100&reason=월간 점검용", headers=h).status_code == 200
-    assert status_of("admin01") == "locked"
+        client.get(f"/customers?page={p}&size=50", headers=h)  # 250건 조회
+    r = client.get("/customers/export?limit=100&reason=월간 점검용", headers=h)
+    assert r.status_code == 403
+    assert status_of("admin01") == "active"  # 차단만 하고 계정은 잠그지 않는다 (R7은 lock: false)
     a = tok(client, "admin02")
-    rules = {x["rule_id"] for x in client.get("/alerts", headers=a).json()["items"]}
-    assert "R4" in rules
+    alerts = client.get("/alerts", headers=a).json()["items"]
+    r7 = [x for x in alerts if x["rule_id"] == "R7"]
+    assert r7 and r7[0]["severity"] == "critical" and r7[0]["username"] == "admin01"
+    audit = client.get("/audit?username=admin01&action=customer.export", headers=a).json()["items"]
+    assert [x["result"] for x in audit] == ["blocked"]  # 성공한 내보내기 기록이 없다
+    assert client.get("/audit?action=response.warn", headers=a).json()["count"] >= 1
 
 
 def test_normal_usage_not_locked(client):

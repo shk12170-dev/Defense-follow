@@ -48,7 +48,8 @@ def build_stats(db, window_min=60):
 
     events = [dict(r) for r in db.execute(
         "SELECT ts, username, action, resource, detail, result FROM audit_logs "
-        "WHERE action IN ('response.lock','admin.unlock') OR (action='auth.login' AND result!='ok') "
+        "WHERE action IN ('response.lock','response.warn','admin.unlock') OR result='blocked' "
+        "OR (action='auth.login' AND result!='ok') "
         "ORDER BY id DESC LIMIT 15")]
 
     totals = {

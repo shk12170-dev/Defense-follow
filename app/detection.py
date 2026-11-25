@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 
 RULES_PATH = Path(__file__).resolve().parent.parent / "rules" / "rules.yaml"
-_KEEP = timedelta(minutes=120)  # 이력 보관 기간 (모든 규칙의 window/lookback보다 길게)
+_KEEP = timedelta(hours=25)  # 이력 보관 기간 (하루 누적 규칙의 window보다 길게)
 
 
 @dataclass
@@ -25,6 +25,8 @@ class Alert:
     user_key: str
     username: str | None
     detail: dict = field(default_factory=dict)
+    # None이면 심각도로 판단(high 이상 잠금), True/False면 규칙에서 명시한 대로 (예: 차단만 하고 잠그지 않음)
+    lock: bool | None = None
 
 
 def load_rules(path=None):
@@ -61,7 +63,7 @@ class Detector:
             return None
         self.last_fired[(rule["id"], key)] = dt
         return Alert(ev["ts"], rule["id"], rule["name"], rule["severity"], rule.get("mitre"),
-                     key, ev.get("username"), detail)
+                     key, ev.get("username"), detail, rule.get("lock"))
 
     def _sum_rows(self, key, since, exclude_action=None):
         return sum(r for (t, r, a) in self.hist.get(key, ()) if t >= since and a != exclude_action)
@@ -112,13 +114,16 @@ class Detector:
             return self._fire(rule, key, dt, ev, {
                 "local_hour": hour, "action": ev["action"], "resource": ev.get("resource")})
 
-    def _rule_inactive_account(self, rule, ev, dt, key, is_data):
+    def _rule_event_match(self, rule, ev, dt, key, is_data):
+        """동작·결과·상세 문구가 모두 맞는 이벤트 하나로 판단하는 단순 매칭 규칙."""
         if ev["action"] not in rule["actions"] or ev["result"] not in rule["results"]:
             return None
         detail = ev.get("detail") or ""
         if any(s in detail for s in rule["detail_contains"]):
             return self._fire(rule, key, dt, ev, {
                 "action": ev["action"], "reason": detail, "ip": ev.get("ip")})
+
+    _rule_inactive_account = _rule_event_match  # R3의 기존 type 이름 호환
 
     def _rule_bulk_then_export(self, rule, ev, dt, key, is_data):
         if ev["action"] != rule["export_action"] or ev["result"] != "ok":
