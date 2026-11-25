@@ -1,5 +1,7 @@
 # Defense-follow: 내부자 정보유출 방어 모의 시스템
 
+[![tests](https://github.com/shk12170-dev/Defense-follow/actions/workflows/tests.yml/badge.svg)](https://github.com/shk12170-dev/Defense-follow/actions/workflows/tests.yml)
+
 쿠팡(2025.11, 내부 접근통제 미흡)과 롯데카드(2025.8, 탐지 지연) 개인정보 유출 사고의 교훈을 **로컬 가상 환경에서 재현하고, 방어 장치가 막는 과정과 한계를 수치로 측정**한 프로젝트입니다.
 
 > 모든 데이터는 무작위 더미이며 로컬 실행 전용입니다. 공격 시뮬레이터는 정상 API를 정상 계정으로 호출해 대량 조회·반출 행동만 재현합니다.
