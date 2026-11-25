@@ -70,6 +70,23 @@ class Detector:
         return sum(r for (t, r, a) in self.hist.get(key, ()) if t >= since and a != exclude_action)
 
     # ---- 이벤트 처리 ----
+    def _remember(self, key, dt, ev):
+        day = dt.astimezone(self.tz).date()
+        d = self.daily.setdefault(key, {})
+        d[day] = d.get(day, 0) + (ev.get("rows") or 0)
+        for old in [k for k in d if (day - k).days > 60]:
+            del d[old]
+        q = self.hist.setdefault(key, deque())
+        q.append((dt, ev.get("rows") or 0, ev["action"]))
+        while q and dt - q[0][0] > _KEEP:
+            q.popleft()
+
+    def warm(self, events):
+        """경보 없이 과거 이벤트로 상태(최근 이력, 개인 기준선)만 채운다. 서버 재시작 후 복원에 쓴다."""
+        for ev in sorted(events, key=lambda e: e["ts"]):
+            if ev["action"] in self.data_actions and ev["result"] == "ok":
+                self._remember(_user_key(ev), _parse(ev["ts"]), ev)
+
     def feed(self, ev):
         dt = _parse(ev["ts"])
         key = _user_key(ev)
@@ -84,15 +101,7 @@ class Detector:
                 alerts.append(a)
 
         if is_data:
-            day = dt.astimezone(self.tz).date()
-            d = self.daily.setdefault(key, {})
-            d[day] = d.get(day, 0) + (ev.get("rows") or 0)
-            for old in [k for k in d if (day - k).days > 60]:
-                del d[old]
-            q = self.hist.setdefault(key, deque())
-            q.append((dt, ev.get("rows") or 0, ev["action"]))
-            while q and dt - q[0][0] > _KEEP:
-                q.popleft()
+            self._remember(key, dt, ev)
         return alerts
 
     def run(self, events):

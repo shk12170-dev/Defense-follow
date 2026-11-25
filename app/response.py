@@ -15,6 +15,7 @@ from app.detection import Detector, load_rules, save_alerts
 _lock = threading.Lock()
 _detector = None
 _rules_cfg = None
+_BASELINE_RESTORE_DAYS = 15  # R8 baseline_days(14일)보다 하루 길게
 
 
 def reset():
@@ -29,6 +30,9 @@ def forget(username):
         if _detector is None:
             return
         _detector.hist.pop(username, None)
+        days = _detector.daily.get(username)
+        if days:  # 오늘(가장 최근 날짜) 누적만 지운다. 과거 기준선은 남겨 공격자가 기준선을 초기화하지 못하게 한다
+            days.pop(max(days), None)
         for k in [k for k in _detector.last_fired if k[1] == username]:
             del _detector.last_fired[k]
 
@@ -60,6 +64,20 @@ def pre_export_check(db, user):
     return None
 
 
+def _restored_detector(db, current):
+    """서버 재시작 후 첫 이벤트에서 DB의 과거 조회 기록으로 탐지 상태(최근 이력·개인 기준선)를 복원한다.
+    현재 이벤트는 이어서 feed로 처리하므로 제외한다."""
+    det = Detector()
+    since = (datetime.now(timezone.utc) - timedelta(days=_BASELINE_RESTORE_DAYS)).isoformat(timespec="milliseconds")
+    actions = list(det.data_actions)
+    ph = ",".join("?" * len(actions))
+    rows = db.execute(
+        f"SELECT ts, username, action, result, rows, ip FROM audit_logs WHERE ts>=? AND ts<? AND result='ok' AND action IN ({ph})",
+        (since, current["ts"], *actions)).fetchall()
+    det.warm([dict(r) for r in rows])
+    return det
+
+
 def _should_lock(alert):
     if alert.lock is not None:
         return alert.lock
@@ -72,7 +90,7 @@ def _on_event(db, ev):
         return
     with _lock:
         if _detector is None:
-            _detector = Detector()
+            _detector = _restored_detector(db, ev)
         alerts = _detector.feed(ev)
     if not alerts:
         return

@@ -59,3 +59,61 @@ def test_baseline_is_per_user():
     alerts = Detector().run(sorted(events, key=lambda e: e["ts"]))
     # 업무량이 많은 사용자의 다른 경보(테스트 데이터가 시간을 넘김)는 무시하고 R8만 본다
     assert [(a.rule_id, a.username) for a in alerts if a.rule_id == "R8"] == [("R8", "light01")]
+
+
+# ---------- 서버 재시작 후 복원 ----------
+def _restart_db(tmp_path, monkeypatch, days):
+    import sqlite3
+    from app import config, db as dbm, response
+    monkeypatch.setenv("DEFENSE_MODE", "on")
+    monkeypatch.setattr(config, "AUDIT_LOG_PATH", tmp_path / "audit.jsonl")
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.executescript(dbm.SCHEMA)
+    conn.execute("INSERT INTO users(username,password_hash,role,status) VALUES('light01','x','agent','active')")
+    # 기준 시각: 어제(KST) 10시를 '오늘'로 본다. 날짜 경계·R1(10분 300건)에 걸리지 않도록 고정 시각을 쓴다.
+    today = datetime.now(KST).replace(hour=10, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    def put(t, rows):
+        conn.execute("INSERT INTO audit_logs(ts,user_id,username,role,action,result,rows) VALUES(?,1,'light01','agent','customer.search','ok',?)",
+                     (t.astimezone(timezone.utc).isoformat(timespec="milliseconds"), rows))
+    for d in range(1, days + 1):  # 지난 며칠 동안 하루 100건
+        put(today - timedelta(days=d), 100)
+    put(today + timedelta(minutes=0), 300)  # 오늘 앞선 조회
+    now = today + timedelta(minutes=30)
+    conn.commit()
+    response.reset()
+    return conn, now.astimezone(timezone.utc)
+
+
+def _today_event(now, rows):
+    return {"ts": now.isoformat(timespec="milliseconds"), "username": "light01", "action": "customer.list",
+            "result": "ok", "rows": rows, "detail": None, "ip": "10.0.0.5", "resource": None}
+
+
+def test_baseline_restored_from_db_after_restart(tmp_path, monkeypatch):
+    from app import response
+    conn, now = _restart_db(tmp_path, monkeypatch, days=7)
+    response._on_event(conn, _today_event(now, 250))  # 재시작 직후 첫 이벤트
+    rules = [r["rule_id"] for r in conn.execute("SELECT rule_id FROM alerts")]
+    assert rules == ["R8"]
+    assert conn.execute("SELECT COUNT(*) FROM audit_logs WHERE action='response.warn'").fetchone()[0] == 1
+    assert conn.execute("SELECT status FROM users").fetchone()[0] == "active"  # 경고만, 잠금 없음
+    response.reset()
+
+
+def test_restart_without_history_has_no_baseline(tmp_path, monkeypatch):
+    from app import response
+    conn, now = _restart_db(tmp_path, monkeypatch, days=0)
+    response._on_event(conn, _today_event(now, 250))
+    assert conn.execute("SELECT COUNT(*) FROM alerts").fetchone()[0] == 0
+    response.reset()
+
+
+def test_unlock_forget_keeps_past_baseline(tmp_path, monkeypatch):
+    from app import response
+    conn, now = _restart_db(tmp_path, monkeypatch, days=7)
+    response._on_event(conn, _today_event(now, 250))
+    response.forget("light01")  # 잠금 해제 후 재감시: 오늘 누적만 지우고 과거 기준선은 유지
+    days = response._detector.daily["light01"]
+    assert len(days) == 7
+    response.reset()
