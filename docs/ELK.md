@@ -54,7 +54,7 @@ $env:KIBANA_PORT = "5602"; docker compose up -d
 ## 검증 상태
 **실제 기동 확인 (2026-11-25, Docker Desktop, Elasticsearch·Kibana·Filebeat 8.15.3)**
 - 5개 서비스가 정상 기동하고, `attack_sim.py`를 컨테이너의 앱에 실행한 결과 감사 로그 22건과 경보 7건이 Elasticsearch에 적재됐습니다 (거절된 이벤트 0건).
-- `kibana-setup`이 데이터 뷰 2개, 저장된 검색 7개, 대시보드 1개를 만들었고, Chrome에서 "Defense 보안 관제" 대시보드를 열어 경보·자동 잠금·R3 후보 패널을 확인했습니다 ([스크린샷](screenshots/04-kibana-dashboard.jpg)).
+- `kibana-setup`이 데이터 뷰 2개, 저장된 검색 11개(R1~R7 + 로그인 실패·자동 잠금 등), 대시보드 1개(패널 11개)를 만들었고, Chrome에서 "Defense 보안 관제" 대시보드를 열어 경보·자동 잠금·R3 후보 패널을 확인했습니다 ([스크린샷](screenshots/04-kibana-dashboard.jpg)).
 - `local_hour`가 UTC→KST로 올바르게 계산되는 것을 확인했습니다 (UTC 23:29 → 8시).
 
 **기동하면서 발견해 고친 문제**
@@ -63,6 +63,13 @@ $env:KIBANA_PORT = "5602"; docker compose up -d
 3. 5601 포트가 다른 프로그램에 사용 중이라 Kibana가 시작되지 않았습니다 → `KIBANA_PORT` 환경변수 추가.
 
 **테스트로 검증 (`tests/test_day8_elk.py`)**: 구성 파일 정합성, Kibana 설정 요청 내용, Sigma R2·R3 탐지 결과 일치.
+
+**R5~R7 저장된 검색 확인 (2차 보완 후)**
+- R7(대량 조회 직후 내보내기 사전 차단)과 단계적 대응 경고 이벤트(`response.warn`)는 **실제 공격 시뮬레이션**으로 생긴 데이터가 패널에 나타났습니다.
+- R5·R6 경보는 하루 누적 조회가 필요해 몇 초 안에 실시간으로 만들 수 없어서, **합성 경보 레코드 2건**(`detail.synthetic: true`)을 경보 로그에 직접 써 넣어 저장된 검색과 필드 매핑이 맞는지만 확인했습니다. 실제 탐지 결과가 아닙니다.
+- 확인 후 `docker compose down -v`로 합성 데이터를 포함한 볼륨을 모두 지웠습니다.
+
+![Kibana R5~R7 패널](screenshots/06-kibana-r5-r7.jpg)
 
 **아직 확인하지 못한 것**
 - 저장된 검색 중 "R2 후보(새벽 접근)"와 "로그인 실패"는 시연 시각과 시나리오 때문에 결과가 0건이라, 실제 데이터로 화면에 나오는 것은 확인하지 못했습니다 (필드 타입과 쿼리 형식은 확인).

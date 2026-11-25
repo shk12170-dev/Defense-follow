@@ -36,6 +36,15 @@ SEARCHES = [
      'result:"ok" and local_hour < 6 and action:customer*', ["username", "action", "local_hour", "resource"]),
     ("defense-s-failed", "로그인 실패", AUDIT_VIEW, 'action:"auth.login" and result:"failed"',
      ["username", "detail", "ip"]),
+    # ---- 2차 보완(R5~R7) ----
+    ("defense-s-r5", "R5 경고: 일일 누적 조회 (잠금 없음)", ALERTS_VIEW, 'rule_id:"R5"',
+     ["severity", "username", "detail"]),
+    ("defense-s-r6", "R6 차단: 일일 누적 조회 (계정 잠금)", ALERTS_VIEW, 'rule_id:"R6"',
+     ["severity", "username", "detail"]),
+    ("defense-s-r7", "R7: 대량 조회 직후 내보내기 사전 차단", AUDIT_VIEW,
+     'action:"customer.export" and result:"blocked"', ["username", "detail", "ip"]),
+    ("defense-s-warn", "단계적 대응: 경고 이벤트 (잠금 없음)", AUDIT_VIEW, 'action:"response.warn"',
+     ["username", "resource", "detail"]),
 ]
 
 

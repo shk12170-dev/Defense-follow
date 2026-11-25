@@ -316,3 +316,52 @@ def test_sigma_levels_match_engine_severities():
     }
     for title, rid in pairs.items():
         assert sigma_by_title(title)["level"] == sev[rid], (title, rid)
+
+
+# ---------- R5~R7 저장된 검색 (2차 보완) ----------
+def search_by_id(sid):
+    return next(s for s in ks.SEARCHES if s[0] == sid)
+
+
+def test_saved_searches_cover_all_rules_r1_to_r7():
+    titles = " ".join(s[1] for s in ks.SEARCHES)
+    for rid in ("R1", "R2", "R3", "R5", "R6", "R7"):
+        assert rid in titles, rid
+    ids = [s[0] for s in ks.SEARCHES]
+    assert len(ids) == len(set(ids)), "저장된 검색 id가 중복됨"
+
+
+def test_r5_r6_searches_query_alerts_by_rule_id():
+    for sid, rid in (("defense-s-r5", "R5"), ("defense-s-r6", "R6")):
+        _id, _title, view, query, cols = search_by_id(sid)
+        assert view == "defense-alerts" and query == f'rule_id:"{rid}"'
+
+
+def test_r7_and_warn_searches_query_audit_log():
+    _id, _t, view, query, _c = search_by_id("defense-s-r7")
+    assert view == "defense-audit" and 'result:"blocked"' in query and 'action:"customer.export"' in query
+    _id, _t, view, query, _c = search_by_id("defense-s-warn")
+    assert view == "defense-audit" and query == 'action:"response.warn"'
+
+
+def test_search_values_match_what_the_app_actually_writes():
+    """검색 조건의 값이 앱이 실제로 남기는 값과 일치하는지 소스에서 확인한다 (R7 결과값, 경고 이벤트 이름)."""
+    main_src = (ROOT / "app" / "main.py").read_text(encoding="utf-8")
+    resp_src = (ROOT / "app" / "response.py").read_text(encoding="utf-8")
+    assert '"customer.export"' in main_src and '"blocked"' in main_src
+    assert '"response.warn"' in resp_src
+    rules = load("rules/rules.yaml")["rules"]
+    assert {r["id"] for r in rules} >= {"R5", "R6", "R7"}
+
+
+def test_dashboard_includes_every_saved_search_in_a_grid_without_overlap():
+    dash = ks.dashboard_object()
+    panels = json.loads(dash["attributes"]["panelsJSON"])
+    assert len(panels) == len(ks.SEARCHES)
+    seen = set()
+    for p in panels:
+        g = p["gridData"]
+        cell = (g["x"], g["y"])
+        assert cell not in seen, "패널 위치가 겹침"
+        seen.add(cell)
+        assert g["x"] + g["w"] <= 48
