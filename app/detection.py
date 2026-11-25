@@ -52,6 +52,7 @@ class Detector:
         self.tz = timezone(timedelta(hours=self.cfg.get("utc_offset_hours", 9)))
         self.hist = {}        # user_key -> deque[(dt, rows, action)]
         self.last_fired = {}  # (rule_id, user_key) -> dt
+        self.daily = {}       # user_key -> {현지 날짜: 조회 건수} (R8 기준선용, 오래된 날은 정리)
 
     # ---- 내부 도구 ----
     def _cooling(self, rule, key, dt):
@@ -83,6 +84,11 @@ class Detector:
                 alerts.append(a)
 
         if is_data:
+            day = dt.astimezone(self.tz).date()
+            d = self.daily.setdefault(key, {})
+            d[day] = d.get(day, 0) + (ev.get("rows") or 0)
+            for old in [k for k in d if (day - k).days > 60]:
+                del d[old]
             q = self.hist.setdefault(key, deque())
             q.append((dt, ev.get("rows") or 0, ev["action"]))
             while q and dt - q[0][0] > _KEEP:
@@ -124,6 +130,24 @@ class Detector:
                 "action": ev["action"], "reason": detail, "ip": ev.get("ip")})
 
     _rule_inactive_account = _rule_event_match  # R3의 기존 type 이름 호환
+
+    def _rule_baseline(self, rule, ev, dt, key, is_data):
+        """사용자별 기준선(UEBA): 오늘 누적 조회량이 본인의 과거 평균보다 크게 높으면 경고.
+        고정 임계값(R5)보다 낮은 '그 사람에게는 이례적인' 증가를 잡는다. 기준선 일수가 부족하면 판단하지 않는다."""
+        if not is_data:
+            return None
+        today = dt.astimezone(self.tz).date()
+        d = self.daily.get(key, {})
+        past = [r for day, r in d.items() if 0 < (today - day).days <= rule["baseline_days"]]
+        if len(past) < rule["min_days"]:
+            return None
+        avg = sum(past) / len(past)
+        total = d.get(today, 0) + (ev.get("rows") or 0)
+        limit = max(rule["min_rows"], rule["multiplier"] * avg)
+        if total >= limit:
+            return self._fire(rule, key, dt, ev, {
+                "rows_today": total, "baseline_avg": round(avg, 1), "baseline_days": len(past),
+                "multiplier": rule["multiplier"], "threshold": round(limit)})
 
     def _rule_bulk_then_export(self, rule, ev, dt, key, is_data):
         if ev["action"] != rule["export_action"] or ev["result"] != "ok":

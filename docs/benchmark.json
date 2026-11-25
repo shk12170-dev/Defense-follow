@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-25 20:56 KST",
+  "generated": "2026-11-26 08:51 KST",
   "customers": 4000,
   "scenarios": {
     "off": {
@@ -30,13 +30,13 @@
         "rows": 300,
         "blocked": true,
         "block_request": 7,
-        "block_ms": 103,
-        "alert_delay_ms": 83,
+        "block_ms": 91,
+        "alert_delay_ms": 66,
         "alerts": 2
       },
       "dormant": {
         "login_denied": true,
-        "alert_delay_ms": 110,
+        "alert_delay_ms": 109,
         "alerts": 2
       },
       "exfil": {
@@ -44,7 +44,7 @@
         "exports_done": 0,
         "blocked": true,
         "final_status": "active",
-        "alert_delay_ms": 84,
+        "alert_delay_ms": 66,
         "alerts": 1
       }
     }
@@ -52,13 +52,13 @@
   "overhead": {
     "off": {
       "requests": 600,
-      "mean_ms": 13.62,
-      "p95_ms": 17.33
+      "mean_ms": 11.71,
+      "p95_ms": 13.89
     },
     "on": {
       "requests": 600,
-      "mean_ms": 13.86,
-      "p95_ms": 18.29
+      "mean_ms": 11.89,
+      "p95_ms": 14.18
     }
   },
   "false_positive": {
@@ -75,7 +75,8 @@
       "R4": 0,
       "R5": 7,
       "R6": 0,
-      "R7": 0
+      "R7": 0,
+      "R8": 0
     },
     "examples": [
       "R5 agent02 1200건",

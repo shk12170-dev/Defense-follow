@@ -63,6 +63,19 @@ rules:
     severity: high
     mitre: T1213
 
+  - id: R8
+    name: 개인 기준선 대비 이상 조회량
+    description: 오늘 누적 조회량이 본인의 과거 평균의 N배 이상이고 최소 건수를 넘음(UEBA). 고정 임계값 R5(1,200건)에 못 미치는 저속 유출을 잡는다. 경고만 하고 잠그지 않음
+    type: baseline
+    baseline_days: 14
+    min_days: 3
+    multiplier: 4
+    min_rows: 500
+    cooldown_min: 1440
+    severity: medium
+    lock: false
+    mitre: T1213
+
   - id: R7
     name: 대량 조회 직후 내보내기 차단
     description: 대량 조회 직후의 내보내기를 서버가 사전에 거부한 사건. 반출은 막고, 계정은 잠그지 않은 채 보안 담당자 확인을 요청(lock false)

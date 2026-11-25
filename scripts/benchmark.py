@@ -195,7 +195,7 @@ def run_false_positive(days=30, seed=7, threshold=300):
     locks = [a for a in alerts if _is_lock(a)]
     return {"days": days, "events": len(events), "agent_days": days * 5, "alerts": len(alerts),
             "locks": len(locks), "warns": len(alerts) - len(locks),
-            "by_rule": {r: sum(1 for a in alerts if a.rule_id == r) for r in ("R1", "R2", "R3", "R4", "R5", "R6", "R7")},
+            "by_rule": {r: sum(1 for a in alerts if a.rule_id == r) for r in ("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8")},
             "examples": [f"{a.rule_id} {a.user_key} {a.detail.get('rows_in_window')}건" for a in alerts[:3]]}
 
 
@@ -334,7 +334,7 @@ NOTES = [
     "참고: 롯데카드 사고는 침해 인지까지 17일이 걸렸다는 보도가 있다(언론 보도 기준). 이 모의 시스템의 경보는 같은 요청 안에서 발생한다.",
     "오탐 평가는 무작위로 만든 합성 로그이며 실제 업무 패턴 검증이 아니다. 오탐으로 잠기면 정상 상담원이 업무를 못 하므로, 운영 적용 전에는 실제 로그로 임계값을 조정해야 한다. 경고 단계(R5)는 계정을 잠그지 않는다.",
     "임계값을 올리면 잠금 오탐은 줄지만 공격 시 유출되는 건수가 늘어난다. 둘 사이의 균형이 규칙 튜닝의 핵심이다.",
-    "저속 공격: 하루 누적 1,200건(경고)·2,000건(차단) 미만이면 여전히 탐지하지 못한다(분당 약 2.5건 이하로 8시간). 사용자별 평소 패턴(기준선) 대비 탐지는 향후 과제다.",
+    "저속 공격: 하루 누적 1,200건(경고)·2,000건(차단) 미만이면 여전히 탐지하지 못한다(분당 약 2.5건 이하로 8시간). 사용자별 기준선 규칙(R8)은 평소 조회량이 적은 사용자의 급증만 잡고, 평소 하루 800건 넘게 보는 상담원에는 효과가 없다(tests/test_day10_baseline.py).",
     "측정은 단일 PC의 인프로세스 테스트 클라이언트 기준이라 네트워크 지연은 포함하지 않는다. 시간 값은 실행마다 다소 달라진다.",
 ]
 
