@@ -43,7 +43,7 @@ docker compose up --build
 | defense_daily_cumulative_correlation.yml | R5·R6 근사 | 50건 이상 조회 24회(경고)·40회(차단) / 24시간. 50건 단위 조회에서 엔진 발동 시점과 일치함을 테스트로 확인 |
 | defense_export_preblock.yml | R7 | 사전 차단 이벤트 하나로 매칭, 탐지 엔진과 결과 일치를 테스트로 확인 |
 
-정확한 기준은 `rules/rules.yaml`입니다. Sigma 파일은 SIEM 간 이식을 위한 표현입니다. pySigma로 변환 가능한지는 확인했습니다(아래 "Sigma 변환 검증"), SIEM에서 실행해 본 것은 아닙니다.
+정확한 기준은 `rules/rules.yaml`입니다. Sigma 파일은 SIEM 간 이식을 위한 표현입니다. pySigma로 변환 가능한지는 확인했고(아래 "Sigma 변환 검증"), 단일 이벤트 규칙은 변환 쿼리를 실제 Elasticsearch에서 실행해 엔진 경보와 일치함을 확인했습니다(아래 "Sigma 쿼리 실제 실행"). 상관 규칙은 실행하지 못했습니다.
 
 ## Sigma 변환 검증 (2026-11-26)
 `scripts/sigma_convert.py`로 `sigma/`의 6개 파일(규칙 9개, 이후 허니토큰 R10 파일 추가로 7개 파일·10개 규칙)을 pySigma로 변환했고 **변환 실패는 0건**이었습니다 (임시 가상환경, 프로젝트 필수 의존성 아님).
@@ -51,6 +51,20 @@ docker compose up --build
 - 상관 규칙(R1·R4·R5·R6 근사): Elasticsearch Lucene 백엔드는 상관 규칙 미지원(`NotImplementedError`), **Splunk 백엔드는 변환됨**. R1은 `bin _time span=10m | stats count ... | search event_count >= 6` 형태.
 - 주의: Splunk 변환은 `bin _time span=…`으로 **고정 시간 구간**을 세므로, 탐지 엔진의 슬라이딩 윈도우와는 경계 근처에서 결과가 다를 수 있습니다. 근사 규칙이라는 기존 설명이 그대로 유효합니다.
 - 환경 메모: pySigma 2.x와 elasticsearch 백엔드 2.1.1의 의존성 범위가 달라 같은 가상환경에 함께 설치하면 경고가 납니다. 두 백엔드를 따로 실행해 확인했습니다.
+
+## Sigma 쿼리 실제 실행 (2026-11-26, Elasticsearch 8.15.3)
+`scripts/sigma_run_es.py`가 단일 이벤트 Sigma 규칙을 pySigma(1.x) Lucene 백엔드로 변환해 **실제 Elasticsearch에서 실행**하고, 탐지 엔진이 같은 이벤트로 남긴 경보 수와 비교한다. `attack_sim.py`·`demo_events.py`로 만든 실제 이벤트 기준:
+
+| 규칙 | 변환된 Lucene 쿼리(요약) | Sigma 쿼리 결과 | 엔진 경보 |
+|---|---|---|---|
+| R3 비활성 계정 접근 | `(action:auth.login AND result:denied AND detail:(*status\=dormant* OR ...)) OR (action:auth.token ...)` | 3건 | 3건 |
+| R7 내보내기 사전 차단 | `action:customer.export AND result:blocked AND detail:*pre\-block*` | 1건 | 1건 |
+| R10 허니토큰 접근 | `action:honeytoken.access AND result:ok AND detail:*decoy*` | 1건 | 1건 |
+| R2 새벽 접근 | `action:customer.* AND result:ok AND local_hour:<6` | 0건(실행 시각이 낮) | 0건 |
+
+- R3·R7·R10은 **엔진과 Sigma 쿼리가 같은 사건을 같은 건수로 탐지**했다. 우려했던 문제(하이픈이 든 값 `pre-block`이 분석기에서 쪼개져 와일드카드가 안 맞는 것)는 Filebeat 인덱스 매핑에서 문자열이 키워드로 저장되어 발생하지 않았다.
+- R2는 실행 시각이 새벽이 아니라 실제 이벤트가 없어 0/0이다. 쿼리 동작은 `local_hour: 3`인 합성 문서 1건을 넣어 그 1건만 잡히고 낮 시간 실제 이벤트(`local_hour` ≥ 6)는 잡히지 않는 것으로 확인했다(합성 문서는 스택과 함께 삭제). 실제 새벽 이벤트로 확인한 것은 아니다.
+- **확인하지 못한 것:** 상관 규칙(R1·R4·R5·R6)은 Lucene 백엔드가 지원하지 않아 실행하지 못했다. Splunk 변환 쿼리는 Splunk 환경이 없어 실행하지 못했다.
 
 ## 포트 충돌
 Kibana 기본 포트 5601을 다른 프로그램이 쓰고 있으면 환경변수로 바꿉니다.
@@ -86,5 +100,5 @@ $env:KIBANA_PORT = "5602"; docker compose up -d
 
 **아직 확인하지 못한 것**
 - 저장된 검색 중 "R2 후보(새벽 접근)"와 "로그인 실패"는 시연 시각과 시나리오 때문에 결과가 0건이라, 실제 데이터로 화면에 나오는 것은 확인하지 못했습니다 (필드 타입과 쿼리 형식은 확인).
-- 변환된 쿼리를 실제 SIEM(Splunk·Elasticsearch)에서 실행해 결과를 대조하지는 않았습니다.
+- 상관 규칙(R1·R4·R5·R6 근사)의 변환 쿼리는 실제 SIEM에서 실행하지 못했습니다(Elasticsearch Lucene 백엔드가 미지원, Splunk는 환경 없음). 단일 이벤트 규칙은 아래 "Sigma 쿼리 실제 실행"에서 확인했습니다.
 - 대시보드의 패널은 표 형태의 검색 결과이며, 시계열 차트 같은 시각화는 만들지 않았습니다.
