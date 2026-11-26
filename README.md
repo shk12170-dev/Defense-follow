@@ -10,6 +10,10 @@
 |---|---|
 | ![정상](docs/screenshots/01-dashboard-normal.jpg) | ![탐지](docs/screenshots/02-dashboard-attack-detected.jpg) |
 
+**시연 GIF** (로그인 → 공격 시뮬레이션 → 탐지·자동 잠금·반출 사전 차단 → 관리자 잠금 해제, 6프레임):
+
+![시연](docs/screenshots/demo.gif)
+
 ## 핵심 결과 (방어 OFF → ON)
 | 지표 | 방어 OFF | 방어 ON |
 |---|---|---|
