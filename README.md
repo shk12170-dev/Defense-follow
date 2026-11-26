@@ -10,7 +10,7 @@
 |---|---|
 | ![정상](docs/screenshots/01-dashboard-normal.jpg) | ![탐지](docs/screenshots/02-dashboard-attack-detected.jpg) |
 
-**시연 GIF** (로그인 → 공격 시뮬레이션 → 탐지·자동 잠금·반출 사전 차단 → 관리자 잠금 해제, 6프레임):
+**시연 GIF** (대시보드 로그인 → 공격 시뮬레이션: 대량 조회는 **재인증 요구**, 반출은 **사전 차단** → 상담원이 인증 코드와 사유로 재인증하고 업무 재개, 3프레임):
 
 ![시연](docs/screenshots/demo.gif)
 

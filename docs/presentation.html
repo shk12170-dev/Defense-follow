@@ -135,14 +135,14 @@
 
 <!-- 6 시연 -->
 <section class="slide">
-  <h2>시연: 공격 → 탐지 → 잠금 → 해제</h2>
+  <h2>시연: 공격 → 탐지 → 재인증 → 재개</h2>
   <div class="grid" style="grid-template-columns: 1.55fr 1fr; align-items:start">
     <img class="shot" src="screenshots/demo.gif" alt="대시보드 시연 GIF">
     <div>
-      <div class="card"><p><span class="tag red">1</span>상담원 대량 조회 → R1 경보, 계정 잠금</p>
+      <div class="card"><p><span class="tag red">1</span>상담원 대량 조회 → R1 경보, <b>재인증 요구</b>(428)</p>
         <p><span class="tag red">2</span>조회 후 반출 시도 → <b>R7 사전 차단</b></p>
-        <p><span class="tag amber">3</span>휴면 계정 접근 → R3 경보</p>
-        <p><span class="tag green">4</span>관리자가 대시보드에서 잠금 해제</p></div>
+        <p><span class="tag amber">3</span>대시보드에 재인증 대기·대응 이벤트 표시</p>
+        <p><span class="tag green">4</span>상담원이 인증 코드+사유로 재인증 → 업무 재개</p></div>
     </div>
   </div>
   <div class="foot"><span>대시보드는 모든 출력값을 이스케이프해 공격자 입력(로그인 아이디)이 화면에서 실행되지 않습니다</span><span>6</span></div>
