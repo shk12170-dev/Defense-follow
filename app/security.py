@@ -39,6 +39,11 @@ def create_token(user):
 
 
 def client_ip(request: Request):
+    if config.trusted_proxy():
+        xff = request.headers.get("x-forwarded-for", "")
+        first = xff.split(",")[0].strip()
+        if first:
+            return first[:64]
     return request.client.host if request.client else "unknown"
 
 

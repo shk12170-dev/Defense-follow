@@ -54,6 +54,7 @@ class Detector:
         self.tz = timezone(timedelta(hours=self.cfg.get("utc_offset_hours", 9)))
         self.hist = {}        # user_key -> deque[(dt, rows, action)]
         self.last_fired = {}  # (rule_id, user_key) -> dt
+        self.fail_ips = {}    # username -> deque[(dt, ip)]: 로그인 실패 이력 (R13용)
         self.denied = {}      # user_key -> deque[dt]: 접근 거부(범위 밖 조회 시도) 이력 (R11용)
         self.floor = {}       # (rule_id, user_key) -> dt: 재인증 이후부터 다시 세는 기준 시각 (volume 규칙의 창 초기화)
         self.daily = {}       # user_key -> {현지 날짜: 조회 건수} (R8 기준선용, 오래된 날은 정리)
@@ -100,6 +101,12 @@ class Detector:
         dt = _parse(ev["ts"])
         key = _user_key(ev)
         is_data = ev["action"] in self.data_actions and ev["result"] == "ok"
+
+        if ev["action"] == "auth.login" and ev["result"] == "failed" and ev.get("username"):
+            fq = self.fail_ips.setdefault(ev["username"], deque())
+            fq.append((dt, ev.get("ip")))
+            while fq and dt - fq[0][0] > _KEEP:
+                fq.popleft()
 
         if ev["result"] == "denied" and "not assigned" in (ev.get("detail") or ""):
             dq = self.denied.setdefault(key, deque())
@@ -184,6 +191,18 @@ class Detector:
             return self._fire(rule, key, dt, ev, {
                 "denied_in_window": n, "window_min": rule["window_min"], "threshold": rule["threshold_count"],
                 "last_resource": ev.get("resource")})
+
+    def _rule_login_spray(self, rule, ev, dt, key, is_data):
+        """한 계정에 대한 로그인 실패가 여러 서로 다른 IP에서 짧은 시간에 발생: 분산 비밀번호 대입(스프레이).
+        IP마다 시도가 적어 (아이디, IP) 단위 스로틀을 피하므로, 계정 기준으로 서로 다른 IP 수를 센다."""
+        if ev["action"] != "auth.login" or ev["result"] != "failed" or not ev.get("username"):
+            return None
+        since = dt - timedelta(minutes=rule["window_min"])
+        ips = {ip for t, ip in self.fail_ips.get(ev["username"], ()) if t >= since and ip}
+        if len(ips) >= rule["threshold_ips"]:
+            return self._fire(rule, ev["username"], dt, ev, {
+                "distinct_ips": len(ips), "window_min": rule["window_min"], "threshold": rule["threshold_ips"],
+                "sample_ips": sorted(ips)[:5]})
 
     def _rule_bulk_then_export(self, rule, ev, dt, key, is_data):
         if ev["action"] != rule["export_action"] or ev["result"] != "ok":

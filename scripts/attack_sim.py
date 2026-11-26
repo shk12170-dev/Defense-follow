@@ -4,7 +4,7 @@
 방어 장치(탐지·자동 차단)가 어느 시점에 개입하는지 보여주는 용도다.
 
 사용: python scripts/attack_sim.py [--base http://127.0.0.1:8000] [--only 1 2 3 4]
-시나리오: 1 대량 조회(R1) / 2 새벽 접근(R2, 오프라인 재생) / 3 퇴사자 계정(R3) / 4 대량 조회 후 반출(R4)
+시나리오: 1 대량 조회(R1) / 2 새벽 접근(R2, 오프라인 재생) / 3 퇴사자 계정(R3) / 4 대량 조회 후 반출(R4) / 5 분산 IP 비밀번호 스프레이(R13)
 """
 import argparse
 import sys
@@ -91,13 +91,32 @@ def s4_exfil(sim):
     sim.log(f"이어서 조회: HTTP {r.status_code} ({r.json().get('detail', '응답 완료 - 누적 조회량에 따른 경보·잠금은 대시보드에서 확인')})")
 
 
+def s5_spray(sim):
+    print("\n=== 시나리오 5: 분산 IP 비밀번호 스프레이 (R13) ===")
+    print("(여러 IP에서 한 계정에 한두 번씩 시도: IP마다는 스로틀 기준 아래라 R12를 피한다. X-Forwarded-For 위조를 이용하므로")
+    print(" 서버를 DEFENSE_TRUSTED_PROXY=on 으로 띄운 로컬 시연에서만 의미가 있다)")
+    sim.reset_accounts(["agent05"])
+    codes = []
+    for i in range(1, 13):
+        r = sim.c.post("/auth/login", json={"username": "agent05", "password": f"guess-{i}"},
+                       headers={"X-Forwarded-For": f"203.0.113.{i}"})
+        codes.append(r.status_code)
+    sim.log(f"12개 IP에서 각 1회 실패 시도: {sorted(set(codes))} (401만 나오면 스로틀에 걸리지 않음)")
+    r, h = sim.login("agent05")  # 공격자가 마침내 올바른 비밀번호를 알아냈다고 가정
+    sim.log(f"올바른 비밀번호로 로그인: HTTP {r.status_code}")
+    if h:
+        r = sim.c.get("/customers?page=1&size=10", headers=h)
+        verdict = "추가 인증(TOTP) 없이는 데이터 접근 불가" if r.status_code == 428 else "데이터 접근 가능"
+        sim.log(f"데이터 조회: HTTP {r.status_code} -> {verdict}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://127.0.0.1:8000")
-    ap.add_argument("--only", nargs="*", type=int, default=[1, 2, 3, 4])
+    ap.add_argument("--only", nargs="*", type=int, default=[1, 2, 3, 4, 5])
     args = ap.parse_args()
     sim = Sim(args.base)
-    steps = {1: s1_bulk, 2: s2_off_hours, 3: s3_dormant, 4: s4_exfil}
+    steps = {1: s1_bulk, 2: s2_off_hours, 3: s3_dormant, 4: s4_exfil, 5: s5_spray}
     for n in args.only:
         steps[n](sim)
     print("\n경보 확인: GET /alerts (admin 로그인 필요)")

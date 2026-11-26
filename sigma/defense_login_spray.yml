@@ -1,0 +1,45 @@
+# 규칙 R13(분산 로그인 실패, 비밀번호 스프레이)의 Sigma 상관(correlation) 표현.
+# 한 계정(username)에 대한 로그인 실패가 10분 안에 서로 다른 IP 8개 이상에서 발생하면 탐지한다.
+# value_count 상관은 서로 다른 값의 개수를 센다. 정확한 기준은 rules/rules.yaml의 R13(threshold_ips)이다.
+title: Failed Login For Existing Account
+id: 5c8e3a17-2b94-4d60-a1f3-7e9d6b0c4a13
+name: defense_failed_login
+status: experimental
+description: 존재하는 계정에 대한 로그인 실패
+author: Defense-follow
+date: 2026-11-26
+logsource:
+  product: defense_follow
+  service: audit
+detection:
+  selection:
+    action: auth.login
+    result: failed
+  condition: selection
+level: informational
+---
+title: Distributed Password Spraying Against One Account (R13)
+id: 1d7f4b92-8a35-4c06-b2e1-9f3a5d8c6b14
+status: experimental
+description: >
+  한 계정의 로그인 실패가 10분 안에 서로 다른 IP 8개 이상에서 발생 (R13).
+  IP마다 시도가 적어 (아이디, IP) 단위 스로틀(R12)을 피하는 분산 비밀번호 대입 징후다.
+  탐지 엔진은 계정을 잠그지 않고 재인증(TOTP)을 요구해, 비밀번호가 뚫려도 인증 코드 없이는 데이터에 접근하지 못하게 한다.
+author: Defense-follow
+date: 2026-11-26
+tags:
+  - attack.credential_access
+  - attack.t1110
+correlation:
+  type: value_count
+  rules:
+    - defense_failed_login
+  group-by:
+    - username
+  timespan: 10m
+  condition:
+    gte: 8
+    field: ip
+falsepositives:
+  - 사내 NAT 뒤에서 여러 사용자가 같은 계정 이름을 잘못 입력하는 경우는 IP가 하나로 보여 해당하지 않는다. 여러 지점에서 동시에 같은 계정으로 로그인하려는 정상 상황(공용 계정)
+level: high

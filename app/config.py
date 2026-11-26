@@ -13,6 +13,12 @@ JWT_TTL_MIN = 30
 PAGE_SIZE_MAX = 50
 
 
+def trusted_proxy():
+    """DEFENSE_TRUSTED_PROXY=on 이면 X-Forwarded-For의 첫 주소를 클라이언트 IP로 쓴다.
+    신뢰할 수 있는 리버스 프록시 뒤에서만 켠다. 프록시 없이 켜면 누구나 IP를 위조해 로그인 스로틀·탐지를 피할 수 있다(기본 꺼짐)."""
+    return os.environ.get("DEFENSE_TRUSTED_PROXY", "off").lower() == "on"
+
+
 def export_approval_required():
     """DEFENSE_EXPORT_APPROVAL=on 이면 내보내기에 다른 관리자의 승인이 필요하다 (기본 꺼짐: 옵션 강화 모드)."""
     return os.environ.get("DEFENSE_EXPORT_APPROVAL", "off").lower() == "on"

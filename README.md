@@ -49,6 +49,7 @@
 | R5 | 일일 누적 조회 (1단계) | 24시간 누적 1,200건 이상 | medium (재인증 요구, 잠금 없음) |
 | R6 | 일일 누적 조회 (차단, 2단계) | 24시간 누적 2,000건 이상 | high (잠금) |
 | R7 | 대량 조회 직후 내보내기 사전 차단 | 직전 30분 200건 조회 후 내보내기 시도 | critical (반출만 막고 잠금 없음) |
+| R13 | 분산 로그인 실패(비밀번호 스프레이) | 한 계정의 로그인 실패가 10분 안에 서로 다른 IP 8개 이상에서 발생 | high (재인증 요구, 계정은 잠그지 않음) |
 | R12 | 로그인 실패 반복(스로틀) | 같은 아이디·IP에서 10분에 5회(IP 전체 20회) 실패하면 로그인을 일시 거부 | medium (계정은 잠그지 않음) |
 | R11 | 범위 밖 고객 조회 거부 반복 | 담당이 아닌 고객 조회 거부가 10분에 10건 이상 (ID 순차 탐색) | high (재인증 요구 → 반복 시 잠금) |
 | R10 | 허니토큰(미끼 고객) 접근 | 정상 업무로는 열 일이 없는 미끼 레코드에 접근 (전수·ID 순차 조회) | critical (즉시 잠금) |
@@ -124,6 +125,7 @@ python -m venv .venv
 - **구조적 한도:** 하드 쿼터는 탐지와 달리 데이터 반환 전에 적용되어 유출 상한이 고정됨 (`app/quota.py`)
 - **미끼와 단계적 대응:** 허니토큰 접근은 즉시 잠금, 정상 업무와 겹칠 수 있는 규칙은 재인증 후 재발동 시 잠금
 - **민감정보 암호화:** 주민번호는 `enc1:` 접두어의 Fernet 암호문으로 저장, 키는 `DEFENSE_DATA_KEY` (기본값은 모의 환경 전용)
+- **분산 대입 대응:** 여러 IP에서 한 계정을 노리는 비밀번호 스프레이(R13)는 계정을 잠그지 않고 재인증을 요구해, 비밀번호가 뚫려도 인증 코드 없이는 데이터 접근이 불가 (시나리오 5, `DEFENSE_TRUSTED_PROXY=on` 필요)
 - **외부 접근 보강:** 로그인 실패가 반복되면 (아이디, IP) 단위로 로그인을 일시 거부하고(HTTP 429) 계정은 잠그지 않아 남의 계정을 잠그는 공격을 피함. 재인증 코드(TOTP)는 한 번 쓰면 재사용 불가
 - **방어 스위치:** `DEFENSE_MODE=off`로 탐지·자동 차단만 끄고 전후 비교
 
@@ -134,7 +136,7 @@ rules/        탐지 규칙 (rules.yaml)
 scripts/      seed.py, attack_sim.py, detect.py, benchmark.py, verify_audit.py, kibana_setup.py, docker_start.py, sigma_convert.py
 elk/          Filebeat 설정
 sigma/        Sigma 형식 탐지 규칙
-tests/        pytest 155개 (test_day1~6, test_day8_elk, test_day9, test_day10_baseline)
+tests/        pytest 163개 (test_day1~6, test_day8_elk, test_day9, test_day10_baseline)
 docs/         보고서, 플레이북, 비교 결과, 스크린샷, 발표 자료(presentation.html), 작업일지
 .github/      GitHub Actions (pytest 자동 실행)
 기획서.md      프로젝트 기획서

@@ -147,6 +147,18 @@ rules:
     lock: false
     mitre: T1110
 
+  - id: R13
+    name: 분산 로그인 실패(비밀번호 스프레이)
+    description: 한 계정의 로그인 실패가 짧은 시간에 서로 다른 여러 IP에서 발생. IP마다 시도가 적어 (아이디, IP) 스로틀(R12)을 피하는 분산 대입 징후. 계정은 잠그지 않고 재인증을 요구해, 비밀번호가 뚫려도 인증 코드(TOTP) 없이는 데이터에 접근할 수 없게 한다
+    type: login_spray
+    window_min: 10
+    threshold_ips: 8
+    cooldown_min: 30
+    severity: high
+    response: stepup
+    escalate: false
+    mitre: T1110
+
   - id: R7
     name: 대량 조회 직후 내보내기 차단
     description: 대량 조회 직후의 내보내기를 서버가 사전에 거부한 사건. 반출은 막고, 계정은 잠그지 않은 채 보안 담당자 확인을 요청(lock false)
