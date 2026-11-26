@@ -1,0 +1,29 @@
+title: Honeytoken Customer Record Accessed
+id: 9d2b6e41-7c35-4a18-b0f7-1e8a4c6d3a12
+status: experimental
+description: >
+  정상 업무로는 열 일이 없는 미끼 고객 레코드(허니토큰)에 접근 (규칙 R10).
+  서버가 미끼가 응답에 포함될 때 honeytoken.access 이벤트를 남기므로 이벤트 하나로 매칭한다.
+  전수 조회, ID 순차 조회, 깊은 페이지 건너뛰기의 거의 확실한 신호이며 탐지 엔진은 계정을 즉시 잠근다.
+author: Defense-follow
+date: 2026-11-26
+tags:
+  - attack.collection
+  - attack.t1119
+logsource:
+  product: defense_follow
+  service: audit
+detection:
+  selection:
+    action: honeytoken.access
+    result: ok
+    detail|contains: 'decoy'
+  condition: selection
+fields:
+  - username
+  - resource
+  - detail
+  - ip
+falsepositives:
+  - 미끼 레코드의 존재를 모르는 신규 관리자가 목록 뒤쪽을 탐색한 경우
+level: critical

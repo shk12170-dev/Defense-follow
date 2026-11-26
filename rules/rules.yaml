@@ -96,6 +96,17 @@ rules:
     lock: false
     mitre: T1213
 
+  - id: R10
+    name: 허니토큰 접근
+    description: 정상 업무로는 열 일이 없는 미끼 고객 레코드(허니토큰)에 접근. 정상 업무와 겹치지 않으므로 전수 조회·ID 순차 조회의 거의 확실한 신호이며 계정을 즉시 잠근다
+    type: event_match
+    actions: [honeytoken.access]
+    results: [ok]
+    detail_contains: ["decoy"]
+    cooldown_min: 60
+    severity: critical
+    mitre: T1119
+
   - id: R7
     name: 대량 조회 직후 내보내기 차단
     description: 대량 조회 직후의 내보내기를 서버가 사전에 거부한 사건. 반출은 막고, 계정은 잠그지 않은 채 보안 담당자 확인을 요청(lock false)

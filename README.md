@@ -47,13 +47,14 @@
 | R5 | 일일 누적 조회 (경고, 1단계) | 24시간 누적 1,200건 이상 | medium (잠금 없음) |
 | R6 | 일일 누적 조회 (차단, 2단계) | 24시간 누적 2,000건 이상 | high (잠금) |
 | R7 | 대량 조회 직후 내보내기 사전 차단 | 직전 30분 200건 조회 후 내보내기 시도 | critical (반출만 막고 잠금 없음) |
+| R10 | 허니토큰(미끼 고객) 접근 | 정상 업무로는 열 일이 없는 미끼 레코드에 접근 (전수·ID 순차 조회) | critical (즉시 잠금) |
 | R9 | 조회 한도 초과 시도 | 서버 하드 쿼터(상담원 1,500·관리자 2,000건/24시간) 소진 후 시도 | high (이미 거부, 경고만) |
 | R8 | 개인 기준선 대비 이상 조회량 (UEBA) | 오늘 누적이 본인 과거 평균의 4배 이상이고 500건 이상 | medium (경고만) |
 
 규칙은 [rules/rules.yaml](rules/rules.yaml)에서 조정하며, 규칙마다 MITRE ATT&CK 기법 번호를 붙였습니다.
 
 ### Sigma 규칙 (SIEM 간 이식용, [sigma/](sigma/))
-R1~R7은 Sigma 형식으로도 제공합니다(R8은 사용자별 과거 평균이 필요해 Sigma로 표현하지 않았습니다). 정확한 기준은 `rules/rules.yaml`이며, 합계(`rows`)를 셀 수 없는 Sigma의 한계 때문에 일부는 근사입니다.
+R1~R7·R10은 Sigma 형식으로도 제공합니다(R8은 사용자별 과거 평균이 필요해 Sigma로 표현하지 않았습니다). 정확한 기준은 `rules/rules.yaml`이며, 합계(`rows`)를 셀 수 없는 Sigma의 한계 때문에 일부는 근사입니다.
 
 | 규칙 | Sigma 파일 | 표현 | 검증 |
 |---|---|---|---|
@@ -122,7 +123,7 @@ rules/        탐지 규칙 (rules.yaml)
 scripts/      seed.py, attack_sim.py, detect.py, benchmark.py, verify_audit.py, kibana_setup.py, docker_start.py, sigma_convert.py
 elk/          Filebeat 설정
 sigma/        Sigma 형식 탐지 규칙
-tests/        pytest 90개 (test_day1~6, test_day8_elk, test_day9, test_day10_baseline)
+tests/        pytest 109개 (test_day1~6, test_day8_elk, test_day9, test_day10_baseline)
 docs/         보고서, 플레이북, 비교 결과, 스크린샷, 발표 자료(presentation.html), 작업일지
 .github/      GitHub Actions (pytest 자동 실행)
 기획서.md      프로젝트 기획서
@@ -140,6 +141,6 @@ docs/         보고서, 플레이북, 비교 결과, 스크린샷, 발표 자�
 - 더 느린 공격: 하루 1,200건 미만은 고정 규칙으로 못 잡습니다. R8(개인 기준선)이 **평소 조회량이 적은 사용자**의 급증은 잡지만, 평소 하루 800건 넘게 보는 상담원은 4배가 R6보다 커서 효과가 없습니다 → 역할(동료 집단) 기준선은 측정 결과 효과가 없어 만들지 않았습니다(아래 보고서 5.3). 주간 누적은 과제
 - 오탐 완화: R1 잠금 오탐(0.67%)이 남아 있습니다 → 잠금 전 관리자 확인, 추가 인증 단계
 - 조회 사전 차단: 내보내기는 사전 차단하지만, 조회는 R1 임계값(300건)까지는 확보할 수 있습니다
-- Kibana 저장된 검색·Sigma 규칙은 R1~R7을 작성했습니다(R8은 제외). 다만 Kibana의 R5·R6 패널은 실시간으로 재현하기 어려워(하루 누적이 필요) 합성 경보 레코드로만 동작을 확인했습니다 ([docs/ELK.md](docs/ELK.md) 참고)
+- Kibana 저장된 검색은 R1~R7·R9·R10, Sigma 규칙은 R1~R7·R10을 작성했습니다(R8은 Sigma 제외). 다만 Kibana의 R5·R6 패널은 실시간으로 재현하기 어려워(하루 누적이 필요) 합성 경보 레코드로만 동작을 확인했습니다 ([docs/ELK.md](docs/ELK.md) 참고)
 - ELK·Docker Compose는 실제 기동까지 확인했습니다. Sigma 규칙은 pySigma 변환까지만 확인했고 SIEM 실행은 하지 않았습니다 ([docs/ELK.md](docs/ELK.md) 참고)
 - 측정은 합성 로그와 단일 PC 인프로세스 기준이며, 실제 업무 패턴과 네트워크 지연은 반영하지 않았습니다.

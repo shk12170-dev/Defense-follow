@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS customers(
   email TEXT NOT NULL,
   rrn TEXT NOT NULL,
   address TEXT NOT NULL,
-  assigned_agent_id INTEGER REFERENCES users(id)
+  assigned_agent_id INTEGER REFERENCES users(id),
+  decoy INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_customers_agent ON customers(assigned_agent_id);
 CREATE TABLE IF NOT EXISTS audit_logs(
@@ -63,6 +64,9 @@ def init_db() -> None:
     conn = connect()
     try:
         conn.executescript(SCHEMA)
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(customers)")]
+        if "decoy" not in cols:  # 기존 DB 마이그레이션
+            conn.execute("ALTER TABLE customers ADD COLUMN decoy INTEGER NOT NULL DEFAULT 0")
         conn.commit()
     finally:
         conn.close()

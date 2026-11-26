@@ -43,6 +43,10 @@ SEARCHES = [
      ["severity", "username", "detail"]),
     ("defense-s-r7", "R7: 대량 조회 직후 내보내기 사전 차단", AUDIT_VIEW,
      'action:"customer.export" and result:"blocked"', ["username", "detail", "ip"]),
+    ("defense-s-honeytoken", "R10: 허니토큰(미끼 고객) 접근", AUDIT_VIEW, 'action:"honeytoken.access"',
+     ["username", "resource", "detail", "ip"]),
+    ("defense-s-quota", "R9: 조회 한도(하드 쿼터) 초과 시도", AUDIT_VIEW, 'result:"blocked" and detail:"quota exceeded"',
+     ["username", "action", "detail", "ip"]),
     ("defense-s-warn", "단계적 대응: 경고 이벤트 (잠금 없음)", AUDIT_VIEW, 'action:"response.warn"',
      ["username", "resource", "detail"]),
 ]

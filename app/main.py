@@ -31,6 +31,14 @@ class LoginIn(BaseModel):
     password: str
 
 
+def _touch_decoys(db, user, ip, rows, resource):
+    """반환하려는 행에 허니토큰(미끼 고객)이 있으면 별도 감사 이벤트를 남긴다 (규칙 R10이 즉시 대응)."""
+    ids = [r["id"] for r in rows if r["decoy"]]
+    if ids:
+        write_audit(db, user, "honeytoken.access", resource, f"decoy ids={ids[:10]}", ip, "ok")
+        db.commit()
+
+
 def _scope(user):
     """상담원은 본인 담당 고객만, 관리자는 전체."""
     if user["role"] == "agent":
@@ -71,6 +79,7 @@ def list_customers(
         (*args, size, (page - 1) * size),
     ).fetchall()
     write_audit(db, user, "customer.list", f"page={page}&size={size}", None, client_ip(request), "ok", len(rows))
+    _touch_decoys(db, user, client_ip(request), rows, f"page={page}&size={size}")
     return {"page": page, "size": size, "items": [masking.masked(r) for r in rows]}
 
 
@@ -98,6 +107,7 @@ def search_customers(
         (*args, like, like, size, (page - 1) * size),
     ).fetchall()
     write_audit(db, user, "customer.search", f"q={q}&page={page}", None, client_ip(request), "ok", len(rows))
+    _touch_decoys(db, user, client_ip(request), rows, f"q={q}&page={page}")
     return {"page": page, "size": size, "items": [masking.masked(r) for r in rows]}
 
 
@@ -127,6 +137,7 @@ def export_customers(
     limit = quota.enforce(db, user, ip, "customer.export", f"limit={limit}", limit)  # 하드 쿼터
     rows = db.execute("SELECT * FROM customers ORDER BY id LIMIT ?", (limit,)).fetchall()
     write_audit(db, user, "customer.export", f"limit={limit}", f"reason={reason.strip()}", ip, "ok", len(rows))
+    _touch_decoys(db, user, ip, rows, f"export limit={limit}")
     return {"count": len(rows), "items": [masking.masked(r) for r in rows]}
 
 
@@ -146,6 +157,7 @@ def get_customer(
     if user["role"] == "agent" and row["assigned_agent_id"] != user["id"]:
         write_audit(db, user, "customer.view", f"customer/{cid}", "not assigned", ip, "denied")
         db.commit()
+        _touch_decoys(db, user, ip, [row], f"customer/{cid}")  # 범위 밖 ID를 건드리다 미끼를 만나면 즉시 대응
         raise HTTPException(403, "담당 고객이 아닙니다")
     quota.enforce(db, user, ip, "customer.unmask" if unmask else "customer.view", f"customer/{cid}", 1)  # 하드 쿼터
     if unmask:
@@ -160,6 +172,7 @@ def get_customer(
         write_audit(db, user, "customer.unmask", f"customer/{cid}", f"reason={reason.strip()}", ip, "ok", 1)
         return masking.full(row)
     write_audit(db, user, "customer.view", f"customer/{cid}", None, ip, "ok", 1)
+    _touch_decoys(db, user, ip, [row], f"customer/{cid}")
     return masking.masked(row)
 
 
