@@ -59,7 +59,7 @@
 규칙은 [rules/rules.yaml](rules/rules.yaml)에서 조정하며, 규칙마다 MITRE ATT&CK 기법 번호를 붙였습니다.
 
 ### Sigma 규칙 (SIEM 간 이식용, [sigma/](sigma/))
-R1~R7·R10은 Sigma 형식으로도 제공합니다(R8은 사용자별 과거 평균이 필요해 Sigma로 표현하지 않았습니다). 정확한 기준은 `rules/rules.yaml`이며, 합계(`rows`)를 셀 수 없는 Sigma의 한계 때문에 일부는 근사입니다.
+R1~R7·R10·R13은 Sigma 형식으로도 제공합니다(R8은 사용자별 과거 평균이 필요해 Sigma로 표현하지 않았습니다). 정확한 기준은 `rules/rules.yaml`이며, 합계(`rows`)를 셀 수 없는 Sigma의 한계 때문에 일부는 근사입니다.
 
 | 규칙 | Sigma 파일 | 표현 | 검증 |
 |---|---|---|---|
@@ -148,7 +148,9 @@ docs/         보고서, 플레이북, 비교 결과, 스크린샷, 발표 자�
 ```
 
 ## 발표 자료
-[docs/presentation.html](docs/presentation.html)은 10장짜리 발표 자료입니다(사고 → 구조 → 규칙 → 측정 결과 → 시연 → 보완 과정 → 3차 보완 → 한계 → 정리). 브라우저로 열어 ← → 키로 넘기고, F로 전체화면, Ctrl+P로 PDF 저장이 됩니다.
+- **[docs/presentation.pptx](docs/presentation.pptx)**: 12장짜리 PowerPoint 발표 자료(사고 → 구조 → 규칙 → 측정 결과 → 시연 → 보완 과정 → 3차 보완 → 시나리오 5 → 보안 점검 → 한계 → 정리, 발표자 노트 포함)
+- **[docs/사고분석-대응보고서.pdf](docs/사고분석-대응보고서.pdf)**: 보고서 PDF(7쪽, 원문은 [사고분석-대응보고서.md](docs/사고분석-대응보고서.md))
+- [docs/presentation.html](docs/presentation.html): 브라우저용 발표 자료(← → 키, F 전체화면)
 
 ## 의존성 점검
 `pip-audit`(임시 가상환경, 프로젝트 의존성 아님)로 `requirements.txt`를 점검한 결과 **PyJWT 2.10.1, starlette 0.41.3(FastAPI 경유), pytest 8.3.4에서 알려진 취약점이 다수 발견**되어 최신 버전(fastapi 0.165.0, PyJWT 2.15.1, pytest 9.2.0, uvicorn 0.54.0, PyYAML 6.0.4)으로 올렸습니다. 올린 뒤 155개 테스트가 모두 통과했고 재점검 결과 알려진 취약점이 없습니다(2026-11-26 기준). 점검 명령: `pip-audit -r requirements.txt`. 새 버전으로 Docker 이미지 빌드, 컨테이너 기동(healthy), 대시보드·로그인(200), Swagger 문서 표시까지 확인했습니다.

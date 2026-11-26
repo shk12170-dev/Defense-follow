@@ -89,7 +89,7 @@
   </div>
   <div class="flow">
     <div class="box rd">반출 사전 차단 (R7)<br><span style="font-size:15px">실행 전에 403</span></div><span class="arrow">↑</span>
-    <div class="box">탐지 엔진 R1~R12 (YAML)<br><span style="font-size:15px">상태 유지 · MITRE ATT&amp;CK 매핑</span></div><span class="arrow">→</span>
+    <div class="box">탐지 엔진 R1~R13 (YAML)<br><span style="font-size:15px">상태 유지 · MITRE ATT&amp;CK 매핑</span></div><span class="arrow">→</span>
     <div class="box">단계적 대응<br><span style="font-size:15px">재인증(TOTP) → 계정 잠금 → 토큰 즉시 무효</span></div>
   </div>
   <div class="flow">
@@ -103,7 +103,7 @@
 
 <!-- 4 규칙 -->
 <section class="slide">
-  <h2>탐지 규칙 R1 ~ R12</h2>
+  <h2>탐지 규칙 R1 ~ R13</h2>
   <table>
     <tr><th style="width:120px">ID</th><th>규칙</th><th>기준</th><th style="width:150px">대응</th></tr>
     <tr><td>R1</td><td>대량 조회</td><td>10분 내 300건 이상</td><td>재인증→잠금</td></tr>
@@ -114,9 +114,9 @@
     <tr><td>R7</td><td>반출 사전 차단</td><td>직전 30분 200건 조회 후 내보내기</td><td>거부</td></tr>
     <tr><td>R8</td><td>개인 기준선 (UEBA)</td><td>본인 평균의 4배 이상, 500건 이상</td><td>재인증</td></tr>
     <tr><td>R9 / R10</td><td>쿼터 초과 시도 / 허니토큰 접근</td><td>하드 쿼터 소진 후 시도 / 미끼 고객 접근</td><td>경고 / 잠금</td></tr>
-    <tr><td>R11 / R12</td><td>범위 밖 조회 거부 반복 / 로그인 실패 반복</td><td>10분에 10건 / 아이디·IP 5회</td><td>재인증 / 429</td></tr>
+    <tr><td>R11~R13</td><td>ID 탐색 · 로그인 실패 · 분산 스프레이</td><td>10분 10건 · 5회 · IP 8개 이상</td><td>재인증 · 429 · 재인증</td></tr>
   </table>
-  <p class="muted" style="margin-top:14px;font-size:19px">R5~R8은 1차 측정의 한계를, R9~R12는 3차 보완(구조적 한도·외부 접근)을 위해 추가했습니다.</p>
+  <p class="muted" style="margin-top:14px;font-size:19px">R5~R8은 1차 측정의 한계를, R9~R13은 3차 보완(구조적 한도·외부 접근)을 위해 추가했습니다.</p>
   <div class="foot"><span>정확한 기준: rules/rules.yaml</span><span>4</span></div>
 </section>
 
@@ -177,7 +177,7 @@
     <div class="card"><span class="tag">한도</span><h3>하드 쿼터</h3><p>반환 전 24시간 상한(상담원 1,500·관리자 2,000건). 속도와 무관하게 유출 상한 고정</p></div>
     <div class="card"><span class="tag red">미끼</span><h3>허니토큰</h3><p>정상 업무와 겹치지 않는 가짜 고객. 닿으면 즉시 잠금, 오탐 거의 없음</p></div>
     <div class="card"><span class="tag green">마찰</span><h3>단계적 재인증</h3><p>TOTP+사유. 정상 업무 잠금 오탐 0.67% → <b>0건</b></p></div>
-    <div class="card"><span class="tag amber">탐색</span><h3>R11 · R12</h3><p>ID 순차 탐색 감지, 로그인 실패 반복 시 일시 거부(계정은 잠그지 않음)</p></div>
+    <div class="card"><span class="tag amber">탐색</span><h3>R11 · R12 · R13</h3><p>ID 순차 탐색 감지, 로그인 실패 반복 거부, 분산 스프레이 대응(계정은 잠그지 않음)</p></div>
     <div class="card"><span class="tag">승인</span><h3>내보내기 2인 승인</h3><p>요청자≠승인자, 15분 1회용 (옵션)</p></div>
     <div class="card"><span class="tag">암호화</span><h3>주민번호 암호화 저장</h3><p>DB 파일이 유출돼도 평문 없음</p></div>
   </div>
@@ -201,8 +201,8 @@
 <section class="slide dark">
   <h2>정리</h2>
   <div class="grid g3" style="margin-top:12px">
-    <div style="font-size:20px"><div class="big" style="color:#7fb0ff">12</div>탐지 규칙 + Sigma 7파일</div>
-    <div style="font-size:20px"><div class="big" style="color:#7fb0ff">155</div>자동 테스트 (GitHub Actions)</div>
+    <div style="font-size:20px"><div class="big" style="color:#7fb0ff">13</div>탐지 규칙 + Sigma 8파일</div>
+    <div style="font-size:20px"><div class="big" style="color:#7fb0ff">163</div>자동 테스트 (GitHub Actions)</div>
     <div style="font-size:20px"><div class="big" style="color:#7fb0ff">1,250 → 250</div>반출 건수 (사전 차단)</div>
   </div>
   <p style="margin-top:44px;font-size:24px">접근통제·마스킹만으로는 정상 권한의 내부자를 막지 못하고,<br>사후 탐지만으로는 첫 피해를 막지 못합니다.<br><b style="color:#fff">두 계층과 사전 차단을 함께 두고, 측정으로 규칙을 고치는 순환이 핵심입니다.</b></p>
