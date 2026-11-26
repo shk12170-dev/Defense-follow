@@ -155,3 +155,60 @@ def test_benchmark_quota_column_is_min_of_detection_and_quota():
     import benchmark
     for e in benchmark.run_evasion(rates=(3, 10, 60)):
         assert e["quota_leaked"] == min(e["rows_leaked"], benchmark.QUOTA_AGENT)
+
+
+# ---------- 7일 쿼터 (다일 누적) ----------
+def preload_days(username, per_day, days_ago_list):
+    """각 날(며칠 전)에 per_day건을 50건씩 조회한 기록. 모두 24시간 밖이라 일일 쿼터·R5에는 걸리지 않는다."""
+    from app import db as dbm
+    conn = dbm.connect()
+    u = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+    for n in days_ago_list:
+        t0 = datetime.now(timezone.utc) - timedelta(days=n)
+        for i in range(per_day // 50):
+            ts = (t0 + timedelta(minutes=i)).isoformat(timespec="milliseconds")
+            conn.execute("INSERT INTO audit_logs(ts,user_id,username,role,action,result,rows) VALUES(?,?,?,?,?,'ok',50)",
+                         (ts, u["id"], username, u["role"], "customer.list"))
+    conn.commit()
+    conn.close()
+
+
+def test_weekly_quota_stops_slow_daily_accumulation(client):
+    preload_days("agent01", 1400, [2, 3, 4, 5, 6])  # 5일 동안 매일 1,400건 = 7,000건 (일일 한도 1,500 미만)
+    r = client.get("/customers?page=1&size=20", headers=tok(client, "agent01"))
+    assert r.status_code == 429
+    blocked = audit_rows("SELECT detail FROM audit_logs WHERE username='agent01' AND result='blocked'")
+    assert "168시간" in blocked[-1]["detail"]  # 하루 한도가 아니라 7일 한도에 걸림
+
+
+def test_weekly_quota_returns_only_the_remaining_part(client):
+    preload_days("agent01", 1380, [2, 3, 4, 5, 6])  # 6,900건 사용, 7일 한도 7,000
+    r = client.get("/customers?page=1&size=50", headers=tok(client, "agent01"))
+    assert r.status_code == 200 and len(r.json()["items"]) <= 50
+    # 남은 100건 중 이번 요청이 가져간 만큼을 제외하고는 다음 요청에서 소진된다
+    served = len(r.json()["items"])
+    r2 = client.get("/customers?page=2&size=50", headers=tok(client, "agent01"))
+    assert r2.status_code == (200 if served < 100 else 429)
+
+
+def test_normal_week_is_not_blocked(client):
+    preload_days("agent01", 1000, [2, 3, 4, 5, 6])  # 하루 1,000건씩 5일 = 5,000건 (정상 범위)
+    assert client.get("/customers?page=1&size=20", headers=tok(client, "agent01")).status_code == 200
+
+
+def test_window_remaining_picks_tightest_window():
+    from app import quota
+    assert quota.remaining([(1500, 100, 24), (7000, 6900, 168)]) == (100, 6900, 7000, 168)
+    assert quota.remaining([(1500, 1400, 24), (7000, 100, 168)]) == (100, 1400, 1500, 24)
+    assert quota.remaining([]) is None
+
+
+def test_multiday_benchmark_weekly_cap_reduces_leak():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+    import benchmark
+    m = {x["per_day"]: x for x in benchmark.run_multiday()}
+    assert m[1450]["quota_24h"] == m[1450]["no_quota"] == 20300  # 일일 쿼터만으로는 못 막음
+    assert m[1450]["quota_24h_7d"] < 0.75 * m[1450]["no_quota"]  # 7일 쿼터로 크게 감소
+    assert m[700]["quota_24h_7d"] == m[700]["no_quota"]  # 정상 업무량은 영향 없음

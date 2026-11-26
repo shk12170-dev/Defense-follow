@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-26 10:24 KST",
+  "generated": "2026-11-26 10:59 KST",
   "customers": 4000,
   "scenarios": {
     "off": {
@@ -30,13 +30,13 @@
         "rows": 300,
         "blocked": true,
         "block_request": 7,
-        "block_ms": 138,
-        "alert_delay_ms": 94,
+        "block_ms": 114,
+        "alert_delay_ms": 87,
         "alerts": 1
       },
       "dormant": {
         "login_denied": true,
-        "alert_delay_ms": 109,
+        "alert_delay_ms": 105,
         "alerts": 2
       },
       "exfil": {
@@ -44,7 +44,7 @@
         "exports_done": 0,
         "blocked": true,
         "final_status": "active",
-        "alert_delay_ms": 81,
+        "alert_delay_ms": 76,
         "alerts": 1
       }
     }
@@ -52,13 +52,13 @@
   "overhead": {
     "off": {
       "requests": 600,
-      "mean_ms": 13.8,
-      "p95_ms": 17.46
+      "mean_ms": 11.42,
+      "p95_ms": 12.79
     },
     "on": {
       "requests": 600,
-      "mean_ms": 14.25,
-      "p95_ms": 17.19
+      "mean_ms": 11.99,
+      "p95_ms": 13.01
     }
   },
   "false_positive": {
@@ -209,6 +209,32 @@
       "agent_days": 150,
       "leak_at_60": 500,
       "detected": true
+    }
+  ],
+  "multiday": [
+    {
+      "per_day": 700,
+      "days": 14,
+      "no_quota": 9800,
+      "quota_24h": 9800,
+      "quota_24h_7d": 9800,
+      "last_day": 700
+    },
+    {
+      "per_day": 1000,
+      "days": 14,
+      "no_quota": 14000,
+      "quota_24h": 14000,
+      "quota_24h_7d": 14000,
+      "last_day": 1000
+    },
+    {
+      "per_day": 1450,
+      "days": 14,
+      "no_quota": 20300,
+      "quota_24h": 20300,
+      "quota_24h_7d": 14000,
+      "last_day": 0
     }
   ]
 }
