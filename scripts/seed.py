@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app import config
 from app.db import connect, init_db
 from app.security import hash_password
+from app.totp import new_secret
 
 DECOY_AFTER = 0.4   # 앞쪽 40%에는 심지 않는다 (소규모 업무·내보내기 100건이 닿지 않도록)
 DECOY_EVERY = 400   # 이 간격마다 1건
@@ -36,8 +37,8 @@ def main(n_customers=10_000, seed=2026):
     try:
         pw_hash = hash_password(DEMO_PASSWORD)
         for name, role, status in USERS:
-            db.execute("INSERT INTO users(username,password_hash,role,status) VALUES(?,?,?,?)",
-                       (name, pw_hash, role, status))
+            db.execute("INSERT INTO users(username,password_hash,role,status,totp_secret) VALUES(?,?,?,?,?)",
+                       (name, pw_hash, role, status, new_secret(f"demo-mfa-{name}")))
         agents = [r["id"] for r in db.execute("SELECT id FROM users WHERE username LIKE 'agent0%' AND status='active'")]
         rows = []
         for i in range(n_customers):

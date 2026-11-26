@@ -1,10 +1,10 @@
 {
-  "generated": "2026-11-26 10:06 KST",
+  "generated": "2026-11-26 10:19 KST",
   "customers": 4000,
   "scenarios": {
     "off": {
       "bulk": {
-        "rows": 805,
+        "rows": 803,
         "blocked": false,
         "block_request": null,
         "block_ms": null,
@@ -30,13 +30,13 @@
         "rows": 300,
         "blocked": true,
         "block_request": 7,
-        "block_ms": 102,
-        "alert_delay_ms": 75,
-        "alerts": 2
+        "block_ms": 117,
+        "alert_delay_ms": 91,
+        "alerts": 1
       },
       "dormant": {
         "login_denied": true,
-        "alert_delay_ms": 111,
+        "alert_delay_ms": 101,
         "alerts": 2
       },
       "exfil": {
@@ -44,7 +44,7 @@
         "exports_done": 0,
         "blocked": true,
         "final_status": "active",
-        "alert_delay_ms": 87,
+        "alert_delay_ms": 74,
         "alerts": 1
       }
     }
@@ -52,22 +52,24 @@
   "overhead": {
     "off": {
       "requests": 600,
-      "mean_ms": 11.0,
-      "p95_ms": 11.94
+      "mean_ms": 13.46,
+      "p95_ms": 16.85
     },
     "on": {
       "requests": 600,
-      "mean_ms": 11.43,
-      "p95_ms": 12.45
+      "mean_ms": 13.33,
+      "p95_ms": 16.07
     }
   },
   "false_positive": {
     "days": 30,
+    "blocks": 1,
     "events": 23178,
     "agent_days": 150,
     "alerts": 8,
-    "locks": 1,
-    "warns": 7,
+    "locks": 0,
+    "stepups": 8,
+    "warns": 0,
     "by_rule": {
       "R1": 1,
       "R2": 0,
@@ -76,7 +78,9 @@
       "R5": 7,
       "R6": 0,
       "R7": 0,
-      "R8": 0
+      "R8": 0,
+      "R9": 0,
+      "R10": 0
     },
     "examples": [
       "R5 agent02 1200건",

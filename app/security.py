@@ -42,11 +42,15 @@ def client_ip(request: Request):
     return request.client.host if request.client else "unknown"
 
 
-def current_user(
+_STEPUP_ALLOWED_PATHS = {"/auth/stepup", "/me"}
+
+
+def authenticated_user(
     request: Request,
     cred: HTTPAuthorizationCredentials | None = Depends(_bearer),
     db=Depends(get_db),
 ):
+    """토큰과 계정 상태를 확인한다. 재인증 요구 여부는 확인하지 않는다(재인증 엔드포인트용)."""
     ip = client_ip(request)
     if cred is None:
         write_audit(db, None, "auth.token", request.url.path, "missing token", ip, "denied")
@@ -64,6 +68,19 @@ def current_user(
         write_audit(db, user, "auth.token", request.url.path, "inactive account", ip, "denied")
         db.commit()
         raise HTTPException(403, "비활성 계정입니다")
+    return user
+
+
+def current_user(
+    request: Request,
+    user=Depends(authenticated_user),
+    db=Depends(get_db),
+):
+    """일반 엔드포인트용: 단계적 대응으로 재인증이 요구된 계정은 재인증 전까지 요청을 거부한다(428)."""
+    if user["stepup_required"] and request.url.path not in _STEPUP_ALLOWED_PATHS:
+        write_audit(db, user, "auth.token", request.url.path, "stepup required", client_ip(request), "denied")
+        db.commit()
+        raise HTTPException(428, "추가 인증이 필요합니다. POST /auth/stepup 으로 인증 코드와 사유를 제출하세요")
     return user
 
 

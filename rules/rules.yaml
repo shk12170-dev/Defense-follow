@@ -27,6 +27,9 @@ rules:
     threshold_rows: 300
     cooldown_min: 30
     severity: high
+    response: stepup      # 먼저 재인증(TOTP+사유)을 요구하고, 24시간 안에 다시 발동하면 잠금 (잠금 오탐을 줄이기 위한 단계적 대응)
+    escalate_min: 1440
+    reset_on_stepup: true   # 재인증 후에는 새로 센다. 이후 다시 기준을 넘으면 잠금
     mitre: T1213
 
   - id: R2
@@ -59,6 +62,8 @@ rules:
     threshold_rows: 1200  # 1,000건이면 정상 업무 경고가 상담원·일의 21%로 너무 잦아 측정 후 상향 (docs/benchmark.md)
     cooldown_min: 1440
     severity: medium
+    response: stepup      # 경고만 하던 1단계를 재인증 요구로 강화
+    escalate: false       # 반복해도 잠그지 않는다 (잠금은 R6가 담당)
     mitre: T1213
 
   - id: R6
@@ -81,7 +86,8 @@ rules:
     min_rows: 500
     cooldown_min: 1440
     severity: medium
-    lock: false
+    response: stepup
+    escalate: false
     mitre: T1213
 
   - id: R9

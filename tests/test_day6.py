@@ -35,9 +35,10 @@ def test_false_positive_is_deterministic_and_threshold_tradeoff():
     a = b.run_false_positive()
     assert a == b.run_false_positive()
     assert a["by_rule"]["R2"] == a["by_rule"]["R3"] == a["by_rule"]["R4"] == 0
-    assert a["alerts"] == a["locks"] + a["warns"]
+    assert a["alerts"] == a["locks"] + a["stepups"] + a["warns"]
+    assert a["locks"] == 0  # 단계적 대응: 정상 업무의 R1은 재인증 요구까지만 간다
     low, high = b.run_false_positive(threshold=200), b.run_false_positive(threshold=500)
-    assert low["locks"] >= a["locks"] >= high["locks"]
+    assert low["blocks"] >= a["blocks"] >= high["blocks"]
 
 
 def test_daily_warning_is_rare_enough_for_normal_work():
@@ -74,7 +75,7 @@ def test_report_rendering_escapes_and_contains_sections():
         "generated": "t<script>", "customers": 10,
         "scenarios": {"off": scen, "on": scen},
         "overhead": {m: {"requests": 1, "mean_ms": 1.0, "p95_ms": 2.0} for m in ("off", "on")},
-        "false_positive": {"days": 1, "events": 1, "agent_days": 5, "alerts": 0, "locks": 0, "warns": 0,
+        "false_positive": {"days": 1, "events": 1, "agent_days": 5, "alerts": 0, "locks": 0, "stepups": 0, "blocks": 0, "warns": 0,
                            "by_rule": {"R1": 0}, "examples": []},
         "evasion": evasion,
         "tradeoff": [{"threshold": 300, "fp_locks": 0, "agent_days": 5, "leak_at_60": 300, "detected": True}],

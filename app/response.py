@@ -37,6 +37,18 @@ def forget(username):
             del _detector.last_fired[k]
 
 
+def after_stepup(username):
+    """재인증 통과 후: reset_on_stepup 규칙(R1)의 집계 창을 초기화한다.
+    정상 사용자는 곧바로 다시 걸리지 않고, 재인증 후 다시 기준을 넘으면(24시간 안) 잠긴다."""
+    with _lock:
+        if _detector is None:
+            return
+        now = datetime.now(timezone.utc)
+        for rule in _cfg()["rules"]:
+            if rule.get("response") == "stepup" and rule.get("reset_on_stepup"):
+                _detector.reset_window(rule["id"], username, now)
+
+
 def _cfg():
     global _rules_cfg
     if _rules_cfg is None:
@@ -84,6 +96,21 @@ def _should_lock(alert):
     return alert.severity in config.LOCK_SEVERITIES
 
 
+def _decide(db, alert, user):
+    """경보에 대한 대응 단계를 정한다: 'lock' | 'stepup' | 'warn'.
+    규칙이 response: stepup 이면 먼저 재인증을 요구하고, 같은 규칙이 escalate_min 이내에 다시 발동하면 잠금으로 올린다."""
+    if alert.response == "stepup":
+        rule = next((r for r in _cfg()["rules"] if r["id"] == alert.rule_id), {})
+        since = (datetime.now(timezone.utc) - timedelta(minutes=rule.get("escalate_min", 1440))).isoformat(timespec="milliseconds")
+        prior = db.execute(
+            "SELECT COUNT(*) FROM audit_logs WHERE user_id=? AND action='response.stepup' AND ts>=? AND detail LIKE ?",
+            (user["id"], since, f"rule={alert.rule_id} %")).fetchone()[0]
+        if rule.get("escalate", True) is False:
+            return "stepup"  # 반복해도 잠그지 않는 규칙(R5·R8): 더 높은 단계 규칙(R6)이 잠금을 담당
+        return "lock" if prior else "stepup"
+    return "lock" if _should_lock(alert) else "warn"
+
+
 def _on_event(db, ev):
     global _detector
     if not config.defense_enabled():
@@ -101,9 +128,14 @@ def _on_event(db, ev):
         user = db.execute("SELECT * FROM users WHERE username=?", (a.username,)).fetchone()
         if user is None or user["status"] != "active":
             continue
-        if _should_lock(a):
+        action = _decide(db, a, user)
+        if action == "lock":
             db.execute("UPDATE users SET status='locked' WHERE id=?", (user["id"],))
             write_audit(db, user, "response.lock", f"user/{a.username}",
+                        f"rule={a.rule_id} {a.rule_name}", ev.get("ip"), "ok")
+        elif action == "stepup":
+            db.execute("UPDATE users SET stepup_required=1 WHERE id=?", (user["id"],))
+            write_audit(db, user, "response.stepup", f"user/{a.username}",
                         f"rule={a.rule_id} {a.rule_name}", ev.get("ip"), "ok")
         else:
             write_audit(db, user, "response.warn", f"user/{a.username}",

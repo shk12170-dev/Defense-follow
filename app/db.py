@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS users(
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK(role IN ('agent','admin','dba')),
   status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','dormant','locked')),
-  last_login TEXT
+  last_login TEXT,
+  stepup_required INTEGER NOT NULL DEFAULT 0,
+  totp_secret TEXT
 );
 CREATE TABLE IF NOT EXISTS customers(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,6 +66,10 @@ def init_db() -> None:
     conn = connect()
     try:
         conn.executescript(SCHEMA)
+        ucols = [r[1] for r in conn.execute("PRAGMA table_info(users)")]
+        for col, ddl in (("stepup_required", "INTEGER NOT NULL DEFAULT 0"), ("totp_secret", "TEXT")):
+            if col not in ucols:  # 기존 DB 마이그레이션
+                conn.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
         cols = [r[1] for r in conn.execute("PRAGMA table_info(customers)")]
         if "decoy" not in cols:  # 기존 DB 마이그레이션
             conn.execute("ALTER TABLE customers ADD COLUMN decoy INTEGER NOT NULL DEFAULT 0")

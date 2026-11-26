@@ -47,6 +47,8 @@ SEARCHES = [
      ["username", "resource", "detail", "ip"]),
     ("defense-s-quota", "R9: 조회 한도(하드 쿼터) 초과 시도", AUDIT_VIEW, 'result:"blocked" and detail:"quota exceeded"',
      ["username", "action", "detail", "ip"]),
+    ("defense-s-stepup", "단계적 대응: 재인증 요구·통과 이벤트", AUDIT_VIEW,
+     'action:"response.stepup" or action:"auth.stepup"', ["username", "action", "result", "detail"]),
     ("defense-s-warn", "단계적 대응: 경고 이벤트 (잠금 없음)", AUDIT_VIEW, 'action:"response.warn"',
      ["username", "resource", "detail"]),
 ]

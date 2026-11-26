@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -10,7 +11,8 @@ from app import config, masking, quota, response
 from app.stats import build_stats
 from app.audit import write_audit
 from app.db import get_db, init_db
-from app.security import (client_ip, create_token, current_user, require_roles,
+from app import totp
+from app.security import (authenticated_user, client_ip, create_token, current_user, require_roles,
                           verify_password)
 
 EXPORT_MAX = 1000
@@ -61,6 +63,38 @@ def login(body: LoginIn, request: Request, db=Depends(get_db)):
     db.execute("UPDATE users SET last_login=datetime('now') WHERE id=?", (user["id"],))
     write_audit(db, user, "auth.login", None, None, ip, "ok")
     return {"access_token": create_token(user), "token_type": "bearer", "role": user["role"]}
+
+
+class StepupIn(BaseModel):
+    code: str
+    reason: str
+
+
+@app.post("/auth/stepup")
+def stepup(body: StepupIn, request: Request, user=Depends(authenticated_user), db=Depends(get_db)):
+    """단계적 대응으로 요구된 추가 인증. 인증 코드(TOTP)와 사유를 제출하면 요청 제한이 풀린다.
+    10분 안에 3회 실패하면 계정을 잠근다 (코드 대입 공격 방지)."""
+    ip = client_ip(request)
+    if not user["stepup_required"]:
+        return {"status": "not_required"}
+    if len(body.reason.strip()) < 5:
+        raise HTTPException(400, "사유(5자 이상)가 필요합니다")
+    if not totp.verify(user["totp_secret"] or "", body.code.strip()):
+        write_audit(db, user, "auth.stepup", None, "wrong code", ip, "failed")
+        recent = db.execute(
+            "SELECT COUNT(*) FROM audit_logs WHERE user_id=? AND action='auth.stepup' AND result='failed' AND ts>=?",
+            (user["id"], (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat(timespec="milliseconds"))).fetchone()[0]
+        if recent >= 3:
+            db.execute("UPDATE users SET status='locked' WHERE id=?", (user["id"],))
+            write_audit(db, user, "response.lock", f"user/{user['username']}", "rule=STEPUP 인증 코드 연속 실패", ip, "ok")
+            db.commit()
+            raise HTTPException(403, "인증 실패가 반복되어 계정이 잠겼습니다")
+        db.commit()
+        raise HTTPException(401, "인증 코드가 올바르지 않습니다")
+    db.execute("UPDATE users SET stepup_required=0 WHERE id=?", (user["id"],))
+    write_audit(db, user, "auth.stepup", None, f"reason={body.reason.strip()}", ip, "ok")
+    response.after_stepup(user["username"])
+    return {"status": "verified"}
 
 
 @app.get("/customers")
@@ -237,7 +271,7 @@ def unlock_user(
         raise HTTPException(404, "사용자를 찾을 수 없습니다")
     if target["status"] != "locked":
         raise HTTPException(409, "잠금 상태의 계정만 해제할 수 있습니다")
-    db.execute("UPDATE users SET status='active' WHERE id=?", (target["id"],))
+    db.execute("UPDATE users SET status='active', stepup_required=0 WHERE id=?", (target["id"],))
     write_audit(db, user, "admin.unlock", f"user/{username}", None, client_ip(request), "ok")
     response.forget(username)
     return {"username": username, "status": "active"}

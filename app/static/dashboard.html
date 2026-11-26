@@ -108,6 +108,8 @@
       <div class="card">
         <h2>잠금된 계정 (자동 차단)</h2>
         <div id="locked"></div>
+        <h2 style="margin-top:14px">재인증 대기 (단계적 대응)</h2>
+        <div id="stepup"></div>
       </div>
       <div class="card">
         <h2>대응·인증 이벤트</h2>
@@ -190,6 +192,9 @@ function render(s) {
   $("locked").innerHTML = s.locked_users.length
     ? `<table>` + s.locked_users.map(u => `<tr><td>${esc(u.username)} <span class="muted">(${esc(u.role)})</span></td><td style="text-align:right"><button data-u="${esc(u.username)}">잠금 해제</button></td></tr>`).join("") + `</table>`
     : `<div class="empty">잠금된 계정이 없습니다.</div>`;
+  $("stepup").innerHTML = (s.stepup_users || []).length
+    ? `<table>` + s.stepup_users.map(u => `<tr><td>${esc(u.username)} <span class="muted">(${esc(u.role)})</span></td><td class="muted" style="text-align:right">추가 인증 대기 중</td></tr>`).join("") + `</table>`
+    : `<div class="empty">재인증 대기 계정이 없습니다.</div>`;
   document.querySelectorAll("#locked button").forEach(b => b.onclick = async () => {
     await api(`/admin/users/${encodeURIComponent(b.dataset.u)}/unlock`, {method: "POST"});
     refresh();

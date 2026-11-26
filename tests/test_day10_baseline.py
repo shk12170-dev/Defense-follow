@@ -34,7 +34,7 @@ def test_light_user_spike_below_fixed_thresholds_is_warned():
     alerts = Detector().run(events)
     assert [a.rule_id for a in alerts] == ["R8"]  # 700건: R1(300/10분)·R5(1,200)에는 못 미침
     a = alerts[0]
-    assert a.lock is False and a.severity == "medium"
+    assert a.response == "stepup" and a.severity == "medium"
     assert a.detail["rows_today"] >= 500 and a.detail["baseline_days"] == 7
 
 
@@ -96,8 +96,9 @@ def test_baseline_restored_from_db_after_restart(tmp_path, monkeypatch):
     response._on_event(conn, _today_event(now, 250))  # 재시작 직후 첫 이벤트
     rules = [r["rule_id"] for r in conn.execute("SELECT rule_id FROM alerts")]
     assert rules == ["R8"]
-    assert conn.execute("SELECT COUNT(*) FROM audit_logs WHERE action='response.warn'").fetchone()[0] == 1
-    assert conn.execute("SELECT status FROM users").fetchone()[0] == "active"  # 경고만, 잠금 없음
+    assert conn.execute("SELECT COUNT(*) FROM audit_logs WHERE action='response.stepup'").fetchone()[0] == 1
+    row = conn.execute("SELECT status, stepup_required FROM users").fetchone()
+    assert (row[0], row[1]) == ("active", 1)  # 재인증 요구, 잠금 없음
     response.reset()
 
 

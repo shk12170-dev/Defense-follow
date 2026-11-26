@@ -36,7 +36,7 @@ def test_stats_requires_admin(client):
 
 def test_stats_empty_state(client):
     s = client.get("/stats", headers=tok(client, "admin02")).json()
-    assert s["totals"] == {"alerts": 0, "alerts_high": 0, "locked": 0, "rows_window": 0}
+    assert s["totals"] == {"alerts": 0, "alerts_high": 0, "locked": 0, "stepup": 0, "rows_window": 0}
     assert len(s["buckets"]) == 12 and s["threshold"] == 300
 
 
@@ -45,12 +45,12 @@ def test_stats_reflects_attack(client):
     for p in range(1, 8):
         client.get(f"/customers?page={p}&size=50", headers=h)
     s = client.get("/stats", headers=tok(client, "admin02")).json()
-    assert s["totals"]["locked"] == 1 and s["totals"]["alerts_high"] >= 1
-    assert s["locked_users"][0]["username"] == "agent01"
+    assert s["totals"]["stepup"] == 1 and s["totals"]["alerts_high"] >= 1  # R1 첫 발동은 재인증 요구
+    assert s["stepup_users"][0]["username"] == "agent01" and s["totals"]["locked"] == 0
     assert s["top_users"][0] == {"username": "agent01", "rows": 300}
     assert sum(b["rows"] for b in s["buckets"]) == 300
     assert any(r["rule_id"] == "R1" for r in s["by_rule"])
-    assert any(e["action"] == "response.lock" for e in s["recent_events"])
+    assert any(e["action"] == "response.stepup" for e in s["recent_events"])
 
 
 def test_stats_does_not_write_audit_log(client):

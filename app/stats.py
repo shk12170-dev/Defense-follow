@@ -46,9 +46,12 @@ def build_stats(db, window_min=60):
     locked = [dict(r) for r in db.execute(
         "SELECT username, role FROM users WHERE status='locked' ORDER BY username")]
 
+    stepup = [dict(r) for r in db.execute(
+        "SELECT username, role FROM users WHERE stepup_required=1 AND status='active' ORDER BY username")]
+
     events = [dict(r) for r in db.execute(
         "SELECT ts, username, action, resource, detail, result FROM audit_logs "
-        "WHERE action IN ('response.lock','response.warn','admin.unlock') OR result='blocked' "
+        "WHERE action IN ('response.lock','response.warn','response.stepup','auth.stepup','admin.unlock') OR result='blocked' "
         "OR (action='auth.login' AND result!='ok') "
         "ORDER BY id DESC LIMIT 15")]
 
@@ -56,6 +59,7 @@ def build_stats(db, window_min=60):
         "alerts": db.execute("SELECT COUNT(*) FROM alerts").fetchone()[0],
         "alerts_high": db.execute("SELECT COUNT(*) FROM alerts WHERE severity IN ('high','critical')").fetchone()[0],
         "locked": len(locked),
+        "stepup": len(stepup),
         "rows_window": sum(buckets),
     }
     return {
@@ -68,6 +72,7 @@ def build_stats(db, window_min=60):
         "by_rule": by_rule,
         "recent_alerts": recent_alerts,
         "locked_users": locked,
+        "stepup_users": stepup,
         "recent_events": events,
         "threshold": next((r["threshold_rows"] for r in cfg["rules"] if r["id"] == "R1"), None),
     }

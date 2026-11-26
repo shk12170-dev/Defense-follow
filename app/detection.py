@@ -27,6 +27,8 @@ class Alert:
     detail: dict = field(default_factory=dict)
     # None이면 심각도로 판단(high 이상 잠금), True/False면 규칙에서 명시한 대로 (예: 차단만 하고 잠그지 않음)
     lock: bool | None = None
+    # 규칙에 명시된 대응: "stepup"(재인증 요구)·"lock"·"warn". None이면 lock 값과 심각도로 판단
+    response: str | None = None
 
 
 def load_rules(path=None):
@@ -52,6 +54,7 @@ class Detector:
         self.tz = timezone(timedelta(hours=self.cfg.get("utc_offset_hours", 9)))
         self.hist = {}        # user_key -> deque[(dt, rows, action)]
         self.last_fired = {}  # (rule_id, user_key) -> dt
+        self.floor = {}       # (rule_id, user_key) -> dt: 재인증 이후부터 다시 세는 기준 시각 (volume 규칙의 창 초기화)
         self.daily = {}       # user_key -> {현지 날짜: 조회 건수} (R8 기준선용, 오래된 날은 정리)
 
     # ---- 내부 도구 ----
@@ -64,10 +67,15 @@ class Detector:
             return None
         self.last_fired[(rule["id"], key)] = dt
         return Alert(ev["ts"], rule["id"], rule["name"], rule["severity"], rule.get("mitre"),
-                     key, ev.get("username"), detail, rule.get("lock"))
+                     key, ev.get("username"), detail, rule.get("lock"), rule.get("response"))
 
     def _sum_rows(self, key, since, exclude_action=None):
         return sum(r for (t, r, a) in self.hist.get(key, ()) if t >= since and a != exclude_action)
+
+    def reset_window(self, rule_id, key, dt):
+        """재인증을 통과한 사용자의 해당 규칙 창을 초기화한다: 이후 조회부터 새로 세고, 쿨다운도 해제한다."""
+        self.floor[(rule_id, key)] = dt
+        self.last_fired.pop((rule_id, key), None)
 
     # ---- 이벤트 처리 ----
     def _remember(self, key, dt, ev):
@@ -115,6 +123,7 @@ class Detector:
         if not is_data:
             return None
         since = dt - timedelta(minutes=rule["window_min"])
+        since = max(since, self.floor.get((rule["id"], key), since))
         total = self._sum_rows(key, since) + (ev.get("rows") or 0)
         if total >= rule["threshold_rows"]:
             return self._fire(rule, key, dt, ev, {

@@ -47,6 +47,15 @@ def preload(username, rows_total, hours_ago=3):
     conn.close()
 
 
+def ensure_stepup(client, user, h):
+    """일일 누적 규칙(R5)이 재인증을 요구했다면 통과시킨다 (쿼터 동작만 보려는 테스트용)."""
+    from app import totp
+    row = audit_rows("SELECT stepup_required, totp_secret FROM users WHERE username=?", (user,))[0]
+    if row["stepup_required"]:
+        r = client.post("/auth/stepup", json={"code": totp.code_for(row["totp_secret"]), "reason": "쿼터 시험용 재인증"}, headers=h)
+        assert r.status_code == 200
+
+
 def audit_rows(sql, args=()):
     from app import db as dbm
     conn = dbm.connect()
@@ -60,6 +69,7 @@ def test_partial_then_blocked_when_quota_runs_out(client):
     h = tok(client, "agent01")
     r = client.get("/customers?page=1&size=50", headers=h)
     assert r.status_code == 200 and len(r.json()["items"]) == 50  # 남은 50건
+    ensure_stepup(client, "agent01", h)  # 누적 1,500건으로 R5가 재인증을 요구함
     r = client.get("/customers?page=2&size=50", headers=h)
     assert r.status_code == 429 and "items" not in r.json()
     blocked = audit_rows("SELECT * FROM audit_logs WHERE username='agent01' AND result='blocked'")
@@ -84,6 +94,7 @@ def test_total_served_never_exceeds_quota(client):
     h = tok(client, "admin01")
     served = 0
     for p in range(1, 10):
+        ensure_stepup(client, "admin01", h)
         r = client.get(f"/customers?page={p}&size=50", headers=h)
         if r.status_code == 200:
             served += len(r.json()["items"])
