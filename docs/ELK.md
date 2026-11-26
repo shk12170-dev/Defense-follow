@@ -43,7 +43,14 @@ docker compose up --build
 | defense_daily_cumulative_correlation.yml | R5·R6 근사 | 50건 이상 조회 24회(경고)·40회(차단) / 24시간. 50건 단위 조회에서 엔진 발동 시점과 일치함을 테스트로 확인 |
 | defense_export_preblock.yml | R7 | 사전 차단 이벤트 하나로 매칭, 탐지 엔진과 결과 일치를 테스트로 확인 |
 
-정확한 기준은 `rules/rules.yaml`입니다. Sigma 파일은 SIEM 간 이식을 위한 표현이며, 변환·실행 도구(pySigma 등)로 실제 쿼리를 만들어 돌려 본 것은 아닙니다.
+정확한 기준은 `rules/rules.yaml`입니다. Sigma 파일은 SIEM 간 이식을 위한 표현입니다. pySigma로 변환 가능한지는 확인했습니다(아래 "Sigma 변환 검증"), SIEM에서 실행해 본 것은 아닙니다.
+
+## Sigma 변환 검증 (2026-11-26)
+`scripts/sigma_convert.py`로 `sigma/`의 6개 파일(규칙 9개)을 pySigma로 변환했고 **변환 실패는 0건**이었습니다 (임시 가상환경, 프로젝트 필수 의존성 아님).
+- 단일 이벤트 규칙(R2·R3·R7): Splunk와 Elasticsearch Lucene 백엔드 모두 변환됨. 예) R7 → `action:customer.export AND result:blocked AND detail:*pre\-block*`
+- 상관 규칙(R1·R4·R5·R6 근사): Elasticsearch Lucene 백엔드는 상관 규칙 미지원(`NotImplementedError`), **Splunk 백엔드는 변환됨**. R1은 `bin _time span=10m | stats count ... | search event_count >= 6` 형태.
+- 주의: Splunk 변환은 `bin _time span=…`으로 **고정 시간 구간**을 세므로, 탐지 엔진의 슬라이딩 윈도우와는 경계 근처에서 결과가 다를 수 있습니다. 근사 규칙이라는 기존 설명이 그대로 유효합니다.
+- 환경 메모: pySigma 2.x와 elasticsearch 백엔드 2.1.1의 의존성 범위가 달라 같은 가상환경에 함께 설치하면 경고가 납니다. 두 백엔드를 따로 실행해 확인했습니다.
 
 ## 포트 충돌
 Kibana 기본 포트 5601을 다른 프로그램이 쓰고 있으면 환경변수로 바꿉니다.
@@ -73,5 +80,5 @@ $env:KIBANA_PORT = "5602"; docker compose up -d
 
 **아직 확인하지 못한 것**
 - 저장된 검색 중 "R2 후보(새벽 접근)"와 "로그인 실패"는 시연 시각과 시나리오 때문에 결과가 0건이라, 실제 데이터로 화면에 나오는 것은 확인하지 못했습니다 (필드 타입과 쿼리 형식은 확인).
-- Sigma 파일은 pySigma 등으로 변환해 실행해 보지 않았습니다.
+- 변환된 쿼리를 실제 SIEM(Splunk·Elasticsearch)에서 실행해 결과를 대조하지는 않았습니다.
 - 대시보드의 패널은 표 형태의 검색 결과이며, 시계열 차트 같은 시각화는 만들지 않았습니다.

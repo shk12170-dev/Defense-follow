@@ -64,7 +64,7 @@ R1~R7은 Sigma 형식으로도 제공합니다(R8은 사용자별 과거 평균�
 | R6 | defense_daily_cumulative_correlation.yml | 근사: 50건 이상 조회 40회/24시간 (≈2,000건) | 50건 단위 조회에서 엔진 발동 시점과 일치 확인 |
 | R7 | defense_export_preblock.yml | 정확: 차단 이벤트 하나로 매칭 | 엔진과 탐지 결과 일치 확인 |
 
-pySigma 등 변환 도구로 실제 쿼리를 만들어 SIEM에서 돌려 본 것은 아닙니다 (형식·논리 검증만 했습니다).
+pySigma(1.x/2.x)로 6개 파일 전부 쿼리 변환에 성공했습니다(`scripts/sigma_convert.py`, Splunk 백엔드). 다만 변환된 쿼리를 실제 SIEM에서 실행해 본 것은 아닙니다.
 
 ## 빠른 시작 (Windows PowerShell, Python 3.12)
 ```powershell
@@ -136,5 +136,5 @@ docs/         보고서, 플레이북, 비교 결과, 스크린샷
 - 오탐 완화: R1 잠금 오탐(0.67%)이 남아 있습니다 → 잠금 전 관리자 확인, 추가 인증 단계
 - 조회 사전 차단: 내보내기는 사전 차단하지만, 조회는 R1 임계값(300건)까지는 확보할 수 있습니다
 - Kibana 저장된 검색·Sigma 규칙은 R1~R7 모두 작성했습니다. 다만 Kibana의 R5·R6 패널은 실시간으로 재현하기 어려워(하루 누적이 필요) 합성 경보 레코드로만 동작을 확인했습니다 ([docs/ELK.md](docs/ELK.md) 참고)
-- ELK·Docker Compose는 실제 기동까지 확인했습니다. Sigma 규칙은 변환·실행 도구로 돌려 보지는 않았습니다 ([docs/ELK.md](docs/ELK.md) 참고)
+- ELK·Docker Compose는 실제 기동까지 확인했습니다. Sigma 규칙은 pySigma 변환까지만 확인했고 SIEM 실행은 하지 않았습니다 ([docs/ELK.md](docs/ELK.md) 참고)
 - 측정은 합성 로그와 단일 PC 인프로세스 기준이며, 실제 업무 패턴과 네트워크 지연은 반영하지 않았습니다.
