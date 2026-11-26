@@ -68,7 +68,7 @@ def test_report_rendering_escapes_and_contains_sections():
             "exfil": {"rows": 1, "exports_done": 1, "blocked": False, "final_status": "active",
                       "alert_delay_ms": None, "alerts": 0}}
     evasion = [{"rate": r, "total_rows": 100, "warn_rule": "R5", "warn_min": 1.0, "warn_rows": 50,
-                "lock_rule": None, "lock_min": None, "lock_rows": None, "rows_leaked": 100, "detected": False}
+                "lock_rule": None, "lock_min": None, "lock_rows": None, "rows_leaked": 100, "quota_leaked": 100, "detected": False}
                for r in (10, 20)]
     res = {
         "generated": "t<script>", "customers": 10,

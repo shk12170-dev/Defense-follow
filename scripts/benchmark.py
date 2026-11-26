@@ -207,6 +207,14 @@ def _is_lock(alert):
     return alert.severity in ("high", "critical")
 
 
+def _agent_quota():
+    from app.detection import load_rules
+    return load_rules()["quota"]["rows"]["agent"]
+
+
+QUOTA_AGENT = _agent_quota()
+
+
 def run_evasion(threshold=300, rates=(3, 5, 10, 20, 30, 60, 150), hours=8):
     out = []
     start = datetime(2026, 11, 10, 14, 0, tzinfo=KST)
@@ -234,6 +242,7 @@ def run_evasion(threshold=300, rates=(3, 5, 10, 20, 30, 60, 150), hours=8):
         out.append({"rate": rate, "total_rows": total, "warn_rule": warn.rule_id if warn else None,
                     "warn_min": wm, "warn_rows": wr, "lock_rule": lock.rule_id if lock else None,
                     "lock_min": lm, "lock_rows": lr, "rows_leaked": lr if lock else total,
+                    "quota_leaked": min(lr if lock else total, QUOTA_AGENT),
                     "detected": lock is not None})
     return out
 
@@ -301,7 +310,7 @@ def build_sections(res):
     def lock_txt(e):
         return f"{e['lock_rule']} · {e['lock_min']}분 후" if e["lock_rule"] else "**차단 못함**"
 
-    ev_rows = [[f"{e['rate']}건/분", warn_txt(e), lock_txt(e), fmt(e["rows_leaked"], "건")] for e in res["evasion"]]
+    ev_rows = [[f"{e['rate']}건/분", warn_txt(e), lock_txt(e), fmt(e["rows_leaked"], "건"), fmt(e["quota_leaked"], "건")] for e in res["evasion"]]
 
     ev = {e["rate"]: e for e in res["evasion"]}
     # 1차 구현(2026-11-25 07:53 KST 측정)의 값. 같은 시나리오·같은 측정 방식의 이전 결과다.
@@ -323,7 +332,7 @@ def build_sections(res):
         ("2차 보완 전후 비교 (누적 조회량·단계적 대응·반출 사전 차단)", ["항목", "1차 구현", "2차 보완"], imp),
         ("오탐 평가 (R1 임계값 300건/10분)", ["대상", "결과", "규칙별"], fp_rows),
         ("임계값 조정: 오탐 대 유출 (R1)", ["R1 임계값", "정상 업무로 인한 잠금", "분당 60건 공격 시 유출"], to_rows),
-        ("저속 공격 분석 (8시간 지속, R1·R5·R6 적용)", ["조회 속도", "1단계 경고", "2단계 차단(잠금)", "유출 건수"], ev_rows),
+        ("저속 공격 분석 (8시간 지속, R1·R5·R6 적용)", ["조회 속도", "1단계 경고", "2단계 차단(잠금)", "유출 건수(탐지만)", f"유출 상한(하드 쿼터 {QUOTA_AGENT:,}건 적용)"], ev_rows),
     ]
 
 
@@ -334,6 +343,7 @@ NOTES = [
     "참고: 롯데카드 사고는 침해 인지까지 17일이 걸렸다는 보도가 있다(언론 보도 기준). 이 모의 시스템의 경보는 같은 요청 안에서 발생한다.",
     "오탐 평가는 무작위로 만든 합성 로그이며 실제 업무 패턴 검증이 아니다. 오탐으로 잠기면 정상 상담원이 업무를 못 하므로, 운영 적용 전에는 실제 로그로 임계값을 조정해야 한다. 경고 단계(R5)는 계정을 잠그지 않는다.",
     "임계값을 올리면 잠금 오탐은 줄지만 공격 시 유출되는 건수가 늘어난다. 둘 사이의 균형이 규칙 튜닝의 핵심이다.",
+    "하드 쿼터(상담원 1,500건/24시간)는 속도와 관계없이 반환 전에 적용되므로 유출 상한이 쿼터로 고정된다. 위 표의 쿼터 열은 탐지 결과와 쿼터 상한 중 작은 값이며, 서버가 실제로 상한을 지키는지는 tests/test_day11_quota.py가 검증한다.",
     "저속 공격: 하루 누적 1,200건(경고)·2,000건(차단) 미만이면 여전히 탐지하지 못한다(분당 약 2.5건 이하로 8시간). 사용자별 기준선 규칙(R8)은 평소 조회량이 적은 사용자의 급증만 잡고, 평소 하루 800건 넘게 보는 상담원에는 효과가 없다(tests/test_day10_baseline.py).",
     "측정은 단일 PC의 인프로세스 테스트 클라이언트 기준이라 네트워크 지연은 포함하지 않는다. 시간 값은 실행마다 다소 달라진다.",
 ]

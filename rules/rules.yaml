@@ -2,6 +2,14 @@
 # 시간대는 한국 표준시(UTC+9) 기준으로 판단한다.
 utc_offset_hours: 9
 
+# 서버 하드 쿼터: 이 기간 동안 한 사용자에게 내줄 수 있는 고객정보 건수의 상한 (탐지와 별개로 반환 전에 적용)
+# 합성 정상 업무 30일에서 상담원 일일 조회량은 평균 740·최대 1,202건이라 상담원 1,500건은 정상 업무를 막지 않는다
+quota:
+  window_hours: 24
+  rows:
+    agent: 1500
+    admin: 2000
+
 # 고객정보 접근으로 간주하는 동작 (result=ok 인 것만 집계)
 data_actions:
   - customer.list
@@ -73,6 +81,18 @@ rules:
     min_rows: 500
     cooldown_min: 1440
     severity: medium
+    lock: false
+    mitre: T1213
+
+  - id: R9
+    name: 조회 한도 초과 시도
+    description: 서버 하드 쿼터를 모두 소진한 뒤에도 조회·내보내기를 시도(저속 대량 수집의 마지막 단계). 이미 서버가 거부했으므로 경고하고 담당자 확인을 요청(lock false)
+    type: event_match
+    actions: [customer.list, customer.search, customer.view, customer.unmask, customer.export]
+    results: [blocked]
+    detail_contains: ["quota exceeded"]
+    cooldown_min: 60
+    severity: high
     lock: false
     mitre: T1213
 

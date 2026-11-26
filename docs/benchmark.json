@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-26 08:51 KST",
+  "generated": "2026-11-26 10:06 KST",
   "customers": 4000,
   "scenarios": {
     "off": {
@@ -30,13 +30,13 @@
         "rows": 300,
         "blocked": true,
         "block_request": 7,
-        "block_ms": 91,
-        "alert_delay_ms": 66,
+        "block_ms": 102,
+        "alert_delay_ms": 75,
         "alerts": 2
       },
       "dormant": {
         "login_denied": true,
-        "alert_delay_ms": 109,
+        "alert_delay_ms": 111,
         "alerts": 2
       },
       "exfil": {
@@ -44,7 +44,7 @@
         "exports_done": 0,
         "blocked": true,
         "final_status": "active",
-        "alert_delay_ms": 66,
+        "alert_delay_ms": 87,
         "alerts": 1
       }
     }
@@ -52,13 +52,13 @@
   "overhead": {
     "off": {
       "requests": 600,
-      "mean_ms": 11.71,
-      "p95_ms": 13.89
+      "mean_ms": 11.0,
+      "p95_ms": 11.94
     },
     "on": {
       "requests": 600,
-      "mean_ms": 11.89,
-      "p95_ms": 14.18
+      "mean_ms": 11.43,
+      "p95_ms": 12.45
     }
   },
   "false_positive": {
@@ -95,6 +95,7 @@
       "lock_min": null,
       "lock_rows": null,
       "rows_leaked": 1450,
+      "quota_leaked": 1450,
       "detected": false
     },
     {
@@ -107,6 +108,7 @@
       "lock_min": 390.0,
       "lock_rows": 2000,
       "rows_leaked": 2000,
+      "quota_leaked": 1500,
       "detected": true
     },
     {
@@ -119,6 +121,7 @@
       "lock_min": 195.0,
       "lock_rows": 2000,
       "rows_leaked": 2000,
+      "quota_leaked": 1500,
       "detected": true
     },
     {
@@ -131,6 +134,7 @@
       "lock_min": 97.5,
       "lock_rows": 2000,
       "rows_leaked": 2000,
+      "quota_leaked": 1500,
       "detected": true
     },
     {
@@ -143,6 +147,7 @@
       "lock_min": 8.3,
       "lock_rows": 300,
       "rows_leaked": 300,
+      "quota_leaked": 300,
       "detected": true
     },
     {
@@ -155,6 +160,7 @@
       "lock_min": 4.2,
       "lock_rows": 300,
       "rows_leaked": 300,
+      "quota_leaked": 300,
       "detected": true
     },
     {
@@ -167,6 +173,7 @@
       "lock_min": 1.7,
       "lock_rows": 300,
       "rows_leaked": 300,
+      "quota_leaked": 300,
       "detected": true
     }
   ],

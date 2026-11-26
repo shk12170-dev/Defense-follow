@@ -6,7 +6,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app import config, masking, response
+from app import config, masking, quota, response
 from app.stats import build_stats
 from app.audit import write_audit
 from app.db import get_db, init_db
@@ -64,6 +64,7 @@ def list_customers(
     db=Depends(get_db),
 ):
     size = min(size, config.PAGE_SIZE_MAX)  # 한 번에 가져올 수 있는 양을 서버에서 제한
+    size = quota.enforce(db, user, client_ip(request), "customer.list", f"page={page}&size={size}", size)  # 하드 쿼터
     where, args = _scope(user)
     rows = db.execute(
         f"SELECT * FROM customers WHERE {where} ORDER BY id LIMIT ? OFFSET ?",
@@ -90,6 +91,7 @@ def search_customers(
         write_audit(db, user, "customer.search", f"q={q}", "query too short after sanitize", client_ip(request), "denied")
         db.commit()
         raise HTTPException(400, "검색어는 와일드카드 제외 2글자 이상이어야 합니다")
+    size = quota.enforce(db, user, client_ip(request), "customer.search", f"q={q}&page={page}", size)  # 하드 쿼터
     like = clean + "%"
     rows = db.execute(
         f"SELECT * FROM customers WHERE {where} AND (name LIKE ? OR email LIKE ?) ORDER BY id LIMIT ? OFFSET ?",
@@ -122,6 +124,7 @@ def export_customers(
                     ip, "blocked")
         db.commit()
         raise HTTPException(403, "대량 조회 직후의 내보내기는 차단되었습니다. 보안 담당자에게 문의하세요")
+    limit = quota.enforce(db, user, ip, "customer.export", f"limit={limit}", limit)  # 하드 쿼터
     rows = db.execute("SELECT * FROM customers ORDER BY id LIMIT ?", (limit,)).fetchall()
     write_audit(db, user, "customer.export", f"limit={limit}", f"reason={reason.strip()}", ip, "ok", len(rows))
     return {"count": len(rows), "items": [masking.masked(r) for r in rows]}
@@ -144,6 +147,7 @@ def get_customer(
         write_audit(db, user, "customer.view", f"customer/{cid}", "not assigned", ip, "denied")
         db.commit()
         raise HTTPException(403, "담당 고객이 아닙니다")
+    quota.enforce(db, user, ip, "customer.unmask" if unmask else "customer.view", f"customer/{cid}", 1)  # 하드 쿼터
     if unmask:
         if user["role"] != "admin":
             write_audit(db, user, "customer.unmask", f"customer/{cid}", "role not allowed", ip, "denied")
