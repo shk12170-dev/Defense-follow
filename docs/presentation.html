@@ -89,8 +89,8 @@
   </div>
   <div class="flow">
     <div class="box rd">반출 사전 차단 (R7)<br><span style="font-size:15px">실행 전에 403</span></div><span class="arrow">↑</span>
-    <div class="box">탐지 엔진 R1~R8 (YAML)<br><span style="font-size:15px">상태 유지 · MITRE ATT&amp;CK 매핑</span></div><span class="arrow">→</span>
-    <div class="box">단계적 대응<br><span style="font-size:15px">경고 → 계정 잠금 → 토큰 즉시 무효</span></div>
+    <div class="box">탐지 엔진 R1~R11 (YAML)<br><span style="font-size:15px">상태 유지 · MITRE ATT&amp;CK 매핑</span></div><span class="arrow">→</span>
+    <div class="box">단계적 대응<br><span style="font-size:15px">재인증(TOTP) → 계정 잠금 → 토큰 즉시 무효</span></div>
   </div>
   <div class="flow">
     <div class="box">대시보드 (3초 갱신)</div><span class="arrow">·</span>
@@ -103,18 +103,20 @@
 
 <!-- 4 규칙 -->
 <section class="slide">
-  <h2>탐지 규칙 R1 ~ R8</h2>
+  <h2>탐지 규칙 R1 ~ R11</h2>
   <table>
     <tr><th style="width:120px">ID</th><th>규칙</th><th>기준</th><th style="width:150px">대응</th></tr>
-    <tr><td>R1</td><td>대량 조회</td><td>10분 내 300건 이상</td><td>잠금</td></tr>
+    <tr><td>R1</td><td>대량 조회</td><td>10분 내 300건 이상</td><td>재인증→잠금</td></tr>
     <tr><td>R2</td><td>비정상 시간대</td><td>00~06시(KST) 접근</td><td>경고</td></tr>
     <tr><td>R3</td><td>휴면·퇴사 계정 접근</td><td>비활성 계정 시도</td><td>잠금</td></tr>
     <tr><td>R4</td><td>대량 조회 후 반출</td><td>30분 내 200건 후 내보내기</td><td>잠금</td></tr>
-    <tr><td>R5 / R6</td><td>일일 누적 조회</td><td>24시간 1,200건 / 2,000건</td><td>경고 / 잠금</td></tr>
+    <tr><td>R5 / R6</td><td>일일 누적 조회</td><td>24시간 1,200건 / 2,000건</td><td>재인증 / 잠금</td></tr>
     <tr><td>R7</td><td>반출 사전 차단</td><td>직전 30분 200건 조회 후 내보내기</td><td>거부</td></tr>
-    <tr><td>R8</td><td>개인 기준선 (UEBA)</td><td>본인 평균의 4배 이상, 500건 이상</td><td>경고</td></tr>
+    <tr><td>R8</td><td>개인 기준선 (UEBA)</td><td>본인 평균의 4배 이상, 500건 이상</td><td>재인증</td></tr>
+    <tr><td>R9 / R10</td><td>쿼터 초과 시도 / 허니토큰 접근</td><td>하드 쿼터 소진 후 시도 / 미끼 고객 접근</td><td>경고 / 잠금</td></tr>
+    <tr><td>R11</td><td>범위 밖 조회 거부 반복</td><td>10분에 10건 (ID 순차 탐색)</td><td>재인증</td></tr>
   </table>
-  <p class="muted" style="margin-top:18px;font-size:19px">R5~R8은 1차 측정에서 드러난 한계를 보완하기 위해 추가한 2차 규칙입니다.</p>
+  <p class="muted" style="margin-top:14px;font-size:19px">R5~R8은 1차 측정의 한계를, R9~R11은 3차 보완(구조적 한도)을 위해 추가했습니다.</p>
   <div class="foot"><span>정확한 기준: rules/rules.yaml</span><span>4</span></div>
 </section>
 
@@ -168,29 +170,44 @@
   <div class="foot"><span>실제 기동해야 드러난 문제(Filebeat 설정 2건, 포트 충돌)도 기록 · docs/작업일지</span><span>7</span></div>
 </section>
 
-<!-- 8 한계 -->
+<!-- 8 3차 보완 -->
+<section class="slide">
+  <h2>3차 보완: 탐지에서 구조적 한도로</h2>
+  <div class="grid g3">
+    <div class="card"><span class="tag">한도</span><h3>하드 쿼터</h3><p>반환 전 24시간 상한(상담원 1,500·관리자 2,000건). 속도와 무관하게 유출 상한 고정</p></div>
+    <div class="card"><span class="tag red">미끼</span><h3>허니토큰</h3><p>정상 업무와 겹치지 않는 가짜 고객. 닿으면 즉시 잠금, 오탐 거의 없음</p></div>
+    <div class="card"><span class="tag green">마찰</span><h3>단계적 재인증</h3><p>TOTP+사유. 정상 업무 잠금 오탐 0.67% → <b>0건</b></p></div>
+    <div class="card"><span class="tag amber">탐색</span><h3>R11</h3><p>범위 밖 ID를 순차로 넣어 보는 탐색 감지</p></div>
+    <div class="card"><span class="tag">승인</span><h3>내보내기 2인 승인</h3><p>요청자≠승인자, 15분 1회용 (옵션)</p></div>
+    <div class="card"><span class="tag">암호화</span><h3>주민번호 암호화 저장</h3><p>DB 파일이 유출돼도 평문 없음</p></div>
+  </div>
+  <p class="muted" style="margin-top:18px;font-size:19px">트레이드오프도 기록했습니다: 재인증을 통과하는 내부자는 R1 기준 최대 약 600건까지 가능, 쿼터 미만으로 매일 가져가는 다일 누적은 여전히 한계입니다.</p>
+  <div class="foot"><span>docs/사고분석-대응보고서.md · 각 항목은 테스트로 검증</span><span>8</span></div>
+</section>
+
+<!-- 9 한계 -->
 <section class="slide">
   <h2>남은 한계 (정직하게)</h2>
   <div class="grid g2">
-    <div class="card"><h3>매우 느린 공격</h3><p>하루 1,200건 미만은 고정 규칙으로 못 잡음. R8은 평소 조회량이 적은 사용자에게만 효과가 있고, 하루 800건 넘게 보는 상담원에는 효과 없음.</p></div>
+    <div class="card"><h3>매우 느린 공격</h3><p>쿼터로 하루 상한은 고정됐지만, 쿼터 미만으로 매일 가져가는 다일 누적은 못 막음(주간 쿼터는 실제 업무량 필요).</p></div>
     <div class="card"><h3>조회는 사전 차단 불가</h3><p>R1 기준 최대 약 300건은 확보 가능. 반출(내보내기)만 사전 차단.</p></div>
-    <div class="card"><h3>오탐</h3><p>합성 로그 기준 잠금 오탐 0.67%. 실제 업무 로그로 임계값 튜닝 필요, 잠금 전 확인 단계 검토.</p></div>
+    <div class="card"><h3>오탐·마찰</h3><p>합성 로그 기준 잠금 오탐은 0건이 됐지만 재인증 마찰이 남음. 실제 업무 로그로 임계값 튜닝 필요.</p></div>
     <div class="card"><h3>검증 범위</h3><p>Sigma는 pySigma 변환까지만 확인(SIEM 실행 미검증). 측정은 합성 로그·단일 PC 기준.</p></div>
   </div>
-  <div class="foot"><span>docs/사고분석-대응보고서.md 5장</span><span>8</span></div>
+  <div class="foot"><span>docs/사고분석-대응보고서.md 5장</span><span>9</span></div>
 </section>
 
 <!-- 9 마무리 -->
 <section class="slide dark">
   <h2>정리</h2>
   <div class="grid g3" style="margin-top:12px">
-    <div style="font-size:20px"><div class="big" style="color:#7fb0ff">8</div>탐지 규칙 + Sigma 6파일</div>
-    <div style="font-size:20px"><div class="big" style="color:#7fb0ff">90</div>자동 테스트 (GitHub Actions)</div>
+    <div style="font-size:20px"><div class="big" style="color:#7fb0ff">11</div>탐지 규칙 + Sigma 7파일</div>
+    <div style="font-size:20px"><div class="big" style="color:#7fb0ff">140</div>자동 테스트 (GitHub Actions)</div>
     <div style="font-size:20px"><div class="big" style="color:#7fb0ff">1,250 → 250</div>반출 건수 (사전 차단)</div>
   </div>
   <p style="margin-top:44px;font-size:24px">접근통제·마스킹만으로는 정상 권한의 내부자를 막지 못하고,<br>사후 탐지만으로는 첫 피해를 막지 못합니다.<br><b style="color:#fff">두 계층과 사전 차단을 함께 두고, 측정으로 규칙을 고치는 순환이 핵심입니다.</b></p>
   <p style="margin-top:36px;font-size:18px;color:#8fa3bf">다음 단계: 실제 로그 기반 임계값 튜닝 · 역할별 기준선 · 잠금 전 관리자 확인 · SIEM 실행 검증</p>
-  <div class="foot"><span>github.com/shk12170-dev/Defense-follow</span><span>9</span></div>
+  <div class="foot"><span>github.com/shk12170-dev/Defense-follow</span><span>10</span></div>
 </section>
 
 </div>

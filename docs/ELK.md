@@ -46,7 +46,7 @@ docker compose up --build
 정확한 기준은 `rules/rules.yaml`입니다. Sigma 파일은 SIEM 간 이식을 위한 표현입니다. pySigma로 변환 가능한지는 확인했습니다(아래 "Sigma 변환 검증"), SIEM에서 실행해 본 것은 아닙니다.
 
 ## Sigma 변환 검증 (2026-11-26)
-`scripts/sigma_convert.py`로 `sigma/`의 6개 파일(규칙 9개)을 pySigma로 변환했고 **변환 실패는 0건**이었습니다 (임시 가상환경, 프로젝트 필수 의존성 아님).
+`scripts/sigma_convert.py`로 `sigma/`의 6개 파일(규칙 9개, 이후 허니토큰 R10 파일 추가로 7개 파일·10개 규칙)을 pySigma로 변환했고 **변환 실패는 0건**이었습니다 (임시 가상환경, 프로젝트 필수 의존성 아님).
 - 단일 이벤트 규칙(R2·R3·R7): Splunk와 Elasticsearch Lucene 백엔드 모두 변환됨. 예) R7 → `action:customer.export AND result:blocked AND detail:*pre\-block*`
 - 상관 규칙(R1·R4·R5·R6 근사): Elasticsearch Lucene 백엔드는 상관 규칙 미지원(`NotImplementedError`), **Splunk 백엔드는 변환됨**. R1은 `bin _time span=10m | stats count ... | search event_count >= 6` 형태.
 - 주의: Splunk 변환은 `bin _time span=…`으로 **고정 시간 구간**을 세므로, 탐지 엔진의 슬라이딩 윈도우와는 경계 근처에서 결과가 다를 수 있습니다. 근사 규칙이라는 기존 설명이 그대로 유효합니다.
@@ -77,6 +77,9 @@ $env:KIBANA_PORT = "5602"; docker compose up -d
 - 확인 후 `docker compose down -v`로 합성 데이터를 포함한 볼륨을 모두 지웠습니다.
 
 ![Kibana R5~R7 패널](screenshots/06-kibana-r5-r7.jpg)
+
+**3차 보완 후 추가된 검색 (실제 Kibana 미확인)**
+- 저장된 검색 3개를 추가했다(R9 쿼터 초과 시도, R10 허니토큰 접근, 재인증 요구·통과 이벤트). 총 14개. 쿼리 형식과 대시보드 패널 배치는 테스트로 확인했지만, 3차 보완 이후에는 Docker 스택을 다시 띄워 화면에서 확인하지 않았다. 감사 로그에 새 필드는 없고 기존 필드(`action`, `result`, `detail`)만 쓴다.
 
 **아직 확인하지 못한 것**
 - 저장된 검색 중 "R2 후보(새벽 접근)"와 "로그인 실패"는 시연 시각과 시나리오 때문에 결과가 0건이라, 실제 데이터로 화면에 나오는 것은 확인하지 못했습니다 (필드 타입과 쿼리 형식은 확인).
