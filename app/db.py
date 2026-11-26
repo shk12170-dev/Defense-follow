@@ -50,6 +50,16 @@ CREATE TABLE IF NOT EXISTS alerts(
   status TEXT NOT NULL DEFAULT 'open',
   UNIQUE(rule_id, user_key, ts)
 );
+CREATE TABLE IF NOT EXISTS export_requests(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created TEXT NOT NULL,
+  requester_id INTEGER NOT NULL REFERENCES users(id),
+  limit_rows INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','used','expired')),
+  approver_id INTEGER REFERENCES users(id),
+  decided TEXT
+);
 CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_logs(ts);
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id);
 """

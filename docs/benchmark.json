@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-26 10:19 KST",
+  "generated": "2026-11-26 10:24 KST",
   "customers": 4000,
   "scenarios": {
     "off": {
@@ -30,13 +30,13 @@
         "rows": 300,
         "blocked": true,
         "block_request": 7,
-        "block_ms": 117,
-        "alert_delay_ms": 91,
+        "block_ms": 138,
+        "alert_delay_ms": 94,
         "alerts": 1
       },
       "dormant": {
         "login_denied": true,
-        "alert_delay_ms": 101,
+        "alert_delay_ms": 109,
         "alerts": 2
       },
       "exfil": {
@@ -44,7 +44,7 @@
         "exports_done": 0,
         "blocked": true,
         "final_status": "active",
-        "alert_delay_ms": 74,
+        "alert_delay_ms": 81,
         "alerts": 1
       }
     }
@@ -52,13 +52,13 @@
   "overhead": {
     "off": {
       "requests": 600,
-      "mean_ms": 13.46,
-      "p95_ms": 16.85
+      "mean_ms": 13.8,
+      "p95_ms": 17.46
     },
     "on": {
       "requests": 600,
-      "mean_ms": 13.33,
-      "p95_ms": 16.07
+      "mean_ms": 14.25,
+      "p95_ms": 17.19
     }
   },
   "false_positive": {

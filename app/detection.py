@@ -54,6 +54,7 @@ class Detector:
         self.tz = timezone(timedelta(hours=self.cfg.get("utc_offset_hours", 9)))
         self.hist = {}        # user_key -> deque[(dt, rows, action)]
         self.last_fired = {}  # (rule_id, user_key) -> dt
+        self.denied = {}      # user_key -> deque[dt]: 접근 거부(범위 밖 조회 시도) 이력 (R11용)
         self.floor = {}       # (rule_id, user_key) -> dt: 재인증 이후부터 다시 세는 기준 시각 (volume 규칙의 창 초기화)
         self.daily = {}       # user_key -> {현지 날짜: 조회 건수} (R8 기준선용, 오래된 날은 정리)
 
@@ -99,6 +100,12 @@ class Detector:
         dt = _parse(ev["ts"])
         key = _user_key(ev)
         is_data = ev["action"] in self.data_actions and ev["result"] == "ok"
+
+        if ev["result"] == "denied" and "not assigned" in (ev.get("detail") or ""):
+            dq = self.denied.setdefault(key, deque())
+            dq.append(dt)
+            while dq and dt - dq[0] > _KEEP:
+                dq.popleft()
 
         # 라이브 이력은 현재 이벤트 반영 전에 R4(직전 조회량)를 계산해야 하므로 먼저 스냅샷 계산
         alerts = []
@@ -166,6 +173,17 @@ class Detector:
             return self._fire(rule, key, dt, ev, {
                 "rows_today": total, "baseline_avg": round(avg, 1), "baseline_days": len(past),
                 "multiplier": rule["multiplier"], "threshold": round(limit)})
+
+    def _rule_denied_burst(self, rule, ev, dt, key, is_data):
+        """범위 밖 고객 조회 거부가 짧은 시간에 반복: ID를 순차로 넣어 보며 탐색하는 행동(IDOR 스캔)."""
+        if ev["result"] != "denied" or "not assigned" not in (ev.get("detail") or ""):
+            return None
+        since = dt - timedelta(minutes=rule["window_min"])
+        n = sum(1 for t in self.denied.get(key, ()) if t >= since)
+        if n >= rule["threshold_count"]:
+            return self._fire(rule, key, dt, ev, {
+                "denied_in_window": n, "window_min": rule["window_min"], "threshold": rule["threshold_count"],
+                "last_resource": ev.get("resource")})
 
     def _rule_bulk_then_export(self, rule, ev, dt, key, is_data):
         if ev["action"] != rule["export_action"] or ev["result"] != "ok":

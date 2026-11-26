@@ -25,6 +25,8 @@
 
 **2차 보완:** 1차 구현의 한계를 측정으로 확인한 뒤, ① 하루 누적 조회량 규칙(R5 경고 → R6 차단, 단계적 대응) ② 대량 조회 직후 내보내기 사전 차단(R7)을 추가했습니다. 1차에서는 첫 내보내기 1,000건이 유출된 뒤에야 계정이 잠겼고, 분당 30건 미만의 저속 공격은 탐지하지 못했습니다.
 
+**3차 보완(구조적 한도):** 탐지만으로는 경보 전 유출과 저속 공격을 막을 수 없어서, ① 서버 **하드 쿼터**(반환 전 24시간 상한: 상담원 1,500·관리자 2,000건) ② **허니토큰**(미끼 고객 접근 시 즉시 잠금) ③ **단계적 재인증**(TOTP+사유, 정상 업무 잠금 오탐 0.67% → 0건) ④ 범위 밖 ID 탐색 탐지(R11) ⑤ **내보내기 2인 승인**(옵션) ⑥ 주민번호 **암호화 저장**을 추가했습니다. 각 항목의 효과와 트레이드오프는 [보고서](docs/사고분석-대응보고서.md)에 있습니다.
+
 **남은 한계:** 하루 1,200건 미만(분당 약 2.5건 이하)으로 천천히 빼가면 여전히 차단하지 못하고, 정상 업무에서도 계정 잠금 오탐 0.67%가 나옵니다. 임계값을 올리면 오탐은 줄지만 유출 건수가 늘어나는 트레이드오프도 정리했습니다. 자세한 내용은 [사고 분석·대응 보고서](docs/사고분석-대응보고서.md)와 [비교 결과](docs/benchmark.md)를 보세요.
 
 ![반출 사전 차단](docs/screenshots/05-export-preblock.jpg)
@@ -47,6 +49,7 @@
 | R5 | 일일 누적 조회 (1단계) | 24시간 누적 1,200건 이상 | medium (재인증 요구, 잠금 없음) |
 | R6 | 일일 누적 조회 (차단, 2단계) | 24시간 누적 2,000건 이상 | high (잠금) |
 | R7 | 대량 조회 직후 내보내기 사전 차단 | 직전 30분 200건 조회 후 내보내기 시도 | critical (반출만 막고 잠금 없음) |
+| R11 | 범위 밖 고객 조회 거부 반복 | 담당이 아닌 고객 조회 거부가 10분에 10건 이상 (ID 순차 탐색) | high (재인증 요구 → 반복 시 잠금) |
 | R10 | 허니토큰(미끼 고객) 접근 | 정상 업무로는 열 일이 없는 미끼 레코드에 접근 (전수·ID 순차 조회) | critical (즉시 잠금) |
 | R9 | 조회 한도 초과 시도 | 서버 하드 쿼터(상담원 1,500·관리자 2,000건/24시간) 소진 후 시도 | high (이미 거부, 경고만) |
 | R8 | 개인 기준선 대비 이상 조회량 (UEBA) | 오늘 누적이 본인 과거 평균의 4배 이상이고 500건 이상 | medium (재인증 요구) |
@@ -98,6 +101,9 @@ python -m venv .venv
 | `GET /customers/search?q=` | agent, admin | 이름·이메일 앞부분 검색(와일드카드 제외 2글자 이상) |
 | `GET /customers/{id}` | agent(담당만), admin | 상세 (`unmask=true&reason=`은 admin만) |
 | `GET /customers/export?limit=&reason=` | admin | 마스킹된 내보내기(사유 필수, 최대 1,000건). 직전 30분에 200건 이상 조회했다면 403으로 사전 차단 |
+| `POST /auth/stepup` | 로그인 사용자 | 단계적 대응으로 재인증이 요구된 계정의 추가 인증(TOTP 코드 + 사유) |
+| `POST /customers/export/request` · `GET /customers/export/{id}` | admin | 내보내기 승인 요청 · 승인 후 내려받기 (`DEFENSE_EXPORT_APPROVAL=on`일 때 직접 호출 대신 사용) |
+| `GET /admin/export-requests` · `POST /admin/export-requests/{id}/approve\|reject` | admin | 승인 대기 목록, 다른 관리자의 승인·거절(본인 요청은 승인 불가) |
 | `GET /audit` | admin | 감사 로그 조회 |
 | `GET /alerts` | admin | 경보 조회 |
 | `GET /stats` | admin | 대시보드 집계 |
@@ -114,6 +120,9 @@ python -m venv .venv
 - **매 요청 상태 재확인:** 토큰이 유효해도 DB의 계정 상태를 확인하므로 잠금이 즉시 적용
 - **변조 탐지:** 감사 로그 해시 체인 (`scripts/verify_audit.py`)
 - **저장형 XSS 방지:** 대시보드는 로그의 모든 값을 이스케이프해 표시 (공격자가 입력한 로그인 아이디로 확인)
+- **구조적 한도:** 하드 쿼터는 탐지와 달리 데이터 반환 전에 적용되어 유출 상한이 고정됨 (`app/quota.py`)
+- **미끼와 단계적 대응:** 허니토큰 접근은 즉시 잠금, 정상 업무와 겹칠 수 있는 규칙은 재인증 후 재발동 시 잠금
+- **민감정보 암호화:** 주민번호는 `enc1:` 접두어의 Fernet 암호문으로 저장, 키는 `DEFENSE_DATA_KEY` (기본값은 모의 환경 전용)
 - **방어 스위치:** `DEFENSE_MODE=off`로 탐지·자동 차단만 끄고 전후 비교
 
 ## 폴더 구조
@@ -123,7 +132,7 @@ rules/        탐지 규칙 (rules.yaml)
 scripts/      seed.py, attack_sim.py, detect.py, benchmark.py, verify_audit.py, kibana_setup.py, docker_start.py, sigma_convert.py
 elk/          Filebeat 설정
 sigma/        Sigma 형식 탐지 규칙
-tests/        pytest 120개 (test_day1~6, test_day8_elk, test_day9, test_day10_baseline)
+tests/        pytest 140개 (test_day1~6, test_day8_elk, test_day9, test_day10_baseline)
 docs/         보고서, 플레이북, 비교 결과, 스크린샷, 발표 자료(presentation.html), 작업일지
 .github/      GitHub Actions (pytest 자동 실행)
 기획서.md      프로젝트 기획서

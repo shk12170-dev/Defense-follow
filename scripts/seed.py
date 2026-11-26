@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app import config
 from app.db import connect, init_db
 from app.security import hash_password
+from app.crypto import encrypt
 from app.totp import new_secret
 
 DECOY_AFTER = 0.4   # 앞쪽 40%에는 심지 않는다 (소규모 업무·내보내기 100건이 닿지 않도록)
@@ -47,7 +48,7 @@ def main(n_customers=10_000, seed=2026):
             email = f"user{i:05d}@example.com"
             rrn = f"{rnd.randint(70, 99):02d}{rnd.randint(1, 12):02d}{rnd.randint(1, 28):02d}-{rnd.choice('1234')}{rnd.randint(0, 999999):06d}"
             addr = f"{rnd.choice(CITIES)} {rnd.randint(1, 300)}번길 {rnd.randint(1, 99)}"
-            rows.append((name, phone, email, rrn, addr, rnd.choice(agents)))
+            rows.append((name, phone, email, encrypt(rrn), addr, rnd.choice(agents)))  # 주민번호는 암호화해 저장
         db.executemany("INSERT INTO customers(name,phone,email,rrn,address,assigned_agent_id) VALUES(?,?,?,?,?,?)", rows)
         # 허니토큰(미끼 고객): 정상 업무로는 열 일이 없는 위치(전체의 뒤쪽 60% 구간, 담당 상담원 없음)에 심는다.
         # 상담원 화면에는 나오지 않고, 관리자의 전수 조회·내보내기·ID 순차 조회에서만 닿는다.

@@ -113,6 +113,18 @@ rules:
     severity: critical
     mitre: T1119
 
+  - id: R11
+    name: 범위 밖 고객 조회 거부 반복
+    description: 담당이 아닌 고객 조회 시도가 짧은 시간에 반복됨. 고객 ID를 순차로 넣어 보는 탐색(IDOR 스캔) 징후. 먼저 재인증을 요구하고 반복하면 잠금
+    type: denied_burst
+    window_min: 10
+    threshold_count: 10
+    cooldown_min: 60
+    severity: high
+    response: stepup
+    escalate_min: 1440
+    mitre: T1087
+
   - id: R7
     name: 대량 조회 직후 내보내기 차단
     description: 대량 조회 직후의 내보내기를 서버가 사전에 거부한 사건. 반출은 막고, 계정은 잠그지 않은 채 보안 담당자 확인을 요청(lock false)

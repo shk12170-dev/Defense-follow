@@ -1,3 +1,6 @@
+from app import crypto
+
+
 def mask_name(v):
     return v[0] + "*" * (len(v) - 1) if len(v) > 1 else v
 
@@ -26,10 +29,12 @@ def masked(row):
         "name": mask_name(row["name"]),
         "phone": mask_phone(row["phone"]),
         "email": mask_email(row["email"]),
-        "rrn": mask_rrn(row["rrn"]),
+        "rrn": mask_rrn(crypto.decrypt(row["rrn"])),
         "address": mask_address(row["address"]),
     }
 
 
 def full(row):
-    return {k: row[k] for k in ("id", "name", "phone", "email", "rrn", "address")}
+    out = {k: row[k] for k in ("id", "name", "phone", "email", "rrn", "address")}
+    out["rrn"] = crypto.decrypt(out["rrn"])
+    return out

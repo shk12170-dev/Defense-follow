@@ -7,9 +7,18 @@ AUDIT_LOG_PATH = Path(os.environ.get("DEFENSE_AUDIT_LOG", BASE_DIR / "logs" / "a
 ALERT_LOG_PATH = Path(os.environ.get("DEFENSE_ALERT_LOG", BASE_DIR / "logs" / "alerts.jsonl"))
 # 모의 환경 전용 키. 실제 서비스에서는 환경변수/비밀관리 서비스로 주입해야 한다.
 JWT_SECRET = os.environ.get("DEFENSE_JWT_SECRET", "local-demo-only-secret-change-me-32bytes!")
+DATA_KEY = os.environ.get("DEFENSE_DATA_KEY", "")  # 민감정보 암호화 키(Fernet). 비어 있으면 모의 환경용 기본 키
 JWT_ALG = "HS256"
 JWT_TTL_MIN = 30
 PAGE_SIZE_MAX = 50
+
+
+def export_approval_required():
+    """DEFENSE_EXPORT_APPROVAL=on 이면 내보내기에 다른 관리자의 승인이 필요하다 (기본 꺼짐: 옵션 강화 모드)."""
+    return os.environ.get("DEFENSE_EXPORT_APPROVAL", "off").lower() == "on"
+
+
+EXPORT_APPROVAL_TTL_MIN = 15  # 승인 후 이 시간 안에 한 번만 내려받을 수 있다
 
 
 def defense_enabled():

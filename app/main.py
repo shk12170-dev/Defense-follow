@@ -145,21 +145,8 @@ def search_customers(
     return {"page": page, "size": size, "items": [masking.masked(r) for r in rows]}
 
 
-@app.get("/customers/export")
-def export_customers(
-    request: Request,
-    limit: int = Query(100, ge=1),
-    reason: str | None = None,
-    user=Depends(require_roles("admin")),
-    db=Depends(get_db),
-):
-    """관리자 전용 내보내기. 사유 필수, 최대 1,000건, 항상 마스킹된 상태로만 내보낸다.
-    (/customers/{cid}보다 먼저 선언해야 'export'가 경로 변수로 해석되지 않는다)"""
-    ip = client_ip(request)
-    if not reason or len(reason.strip()) < 5:
-        write_audit(db, user, "customer.export", f"limit={limit}", "reason missing", ip, "denied")
-        db.commit()
-        raise HTTPException(400, "내보내기 사유(5자 이상)가 필요합니다")
+def _serve_export(db, user, ip, limit, reason):
+    """내보내기 실행부: 사전 차단(R7) → 하드 쿼터 → 마스킹된 데이터 반환. 직접 호출과 승인 후 호출이 공유한다."""
     limit = min(limit, EXPORT_MAX)
     risk = response.pre_export_check(db, user)
     if risk:  # 대량 조회 직후의 내보내기는 실행하지 않고 거부한다 (사후 차단이 아닌 사전 차단)
@@ -173,6 +160,110 @@ def export_customers(
     write_audit(db, user, "customer.export", f"limit={limit}", f"reason={reason.strip()}", ip, "ok", len(rows))
     _touch_decoys(db, user, ip, rows, f"export limit={limit}")
     return {"count": len(rows), "items": [masking.masked(r) for r in rows]}
+
+
+def _check_reason(db, user, ip, limit, reason):
+    if not reason or len(reason.strip()) < 5:
+        write_audit(db, user, "customer.export", f"limit={limit}", "reason missing", ip, "denied")
+        db.commit()
+        raise HTTPException(400, "내보내기 사유(5자 이상)가 필요합니다")
+
+
+@app.get("/customers/export")
+def export_customers(
+    request: Request,
+    limit: int = Query(100, ge=1),
+    reason: str | None = None,
+    user=Depends(require_roles("admin")),
+    db=Depends(get_db),
+):
+    """관리자 전용 내보내기. 사유 필수, 최대 1,000건, 항상 마스킹된 상태로만 내보낸다.
+    승인 모드(DEFENSE_EXPORT_APPROVAL=on)에서는 직접 호출할 수 없고 요청·승인 절차를 거쳐야 한다.
+    (/customers/{cid}보다 먼저 선언해야 'export'가 경로 변수로 해석되지 않는다)"""
+    ip = client_ip(request)
+    if config.export_approval_required():
+        write_audit(db, user, "customer.export", f"limit={limit}", "approval required", ip, "denied")
+        db.commit()
+        raise HTTPException(403, "내보내기는 다른 관리자의 승인이 필요합니다. POST /customers/export/request 로 요청하세요")
+    _check_reason(db, user, ip, limit, reason)
+    return _serve_export(db, user, ip, limit, reason)
+
+
+class ExportRequestIn(BaseModel):
+    limit: int = 100
+    reason: str
+
+
+@app.post("/customers/export/request")
+def export_request(body: ExportRequestIn, request: Request, user=Depends(require_roles("admin")), db=Depends(get_db)):
+    """내보내기 승인 요청. 요청자와 다른 관리자가 승인해야 내려받을 수 있다."""
+    ip = client_ip(request)
+    _check_reason(db, user, ip, body.limit, body.reason)
+    now = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    cur = db.execute("INSERT INTO export_requests(created,requester_id,limit_rows,reason) VALUES(?,?,?,?)",
+                     (now, user["id"], min(max(body.limit, 1), EXPORT_MAX), body.reason.strip()))
+    write_audit(db, user, "export.request", f"export_request/{cur.lastrowid}", f"limit={body.limit} reason={body.reason.strip()}", ip, "ok")
+    return {"id": cur.lastrowid, "status": "pending"}
+
+
+@app.get("/admin/export-requests")
+def export_requests(request: Request, user=Depends(require_roles("admin")), db=Depends(get_db)):
+    rows = db.execute(
+        "SELECT e.id, e.created, u.username AS requester, e.limit_rows, e.reason, e.status FROM export_requests e "
+        "JOIN users u ON u.id=e.requester_id ORDER BY e.id DESC LIMIT 50").fetchall()
+    return {"count": len(rows), "items": [dict(r) for r in rows]}
+
+
+def _decide_export(rid, request, user, db, approve):
+    ip = client_ip(request)
+    req = db.execute("SELECT * FROM export_requests WHERE id=?", (rid,)).fetchone()
+    if req is None:
+        raise HTTPException(404, "요청을 찾을 수 없습니다")
+    if req["status"] != "pending":
+        raise HTTPException(409, "대기 중인 요청만 처리할 수 있습니다")
+    if req["requester_id"] == user["id"]:  # 본인 요청은 본인이 승인할 수 없다 (2인 원칙)
+        write_audit(db, user, "export.approve", f"export_request/{rid}", "self approval", ip, "denied")
+        db.commit()
+        raise HTTPException(403, "본인의 요청은 승인할 수 없습니다")
+    status = "approved" if approve else "rejected"
+    db.execute("UPDATE export_requests SET status=?, approver_id=?, decided=? WHERE id=?",
+               (status, user["id"], datetime.now(timezone.utc).isoformat(timespec="milliseconds"), rid))
+    write_audit(db, user, "export.approve" if approve else "export.reject", f"export_request/{rid}", None, ip, "ok")
+    return {"id": rid, "status": status}
+
+
+@app.post("/admin/export-requests/{rid}/approve")
+def approve_export(rid: int, request: Request, user=Depends(require_roles("admin")), db=Depends(get_db)):
+    return _decide_export(rid, request, user, db, True)
+
+
+@app.post("/admin/export-requests/{rid}/reject")
+def reject_export(rid: int, request: Request, user=Depends(require_roles("admin")), db=Depends(get_db)):
+    return _decide_export(rid, request, user, db, False)
+
+
+@app.get("/customers/export/{rid}")
+def download_export(rid: int, request: Request, user=Depends(require_roles("admin")), db=Depends(get_db)):
+    """승인된 내보내기를 요청자 본인이 한 번만, 승인 후 15분 안에 내려받는다."""
+    ip = client_ip(request)
+    req = db.execute("SELECT * FROM export_requests WHERE id=?", (rid,)).fetchone()
+    if req is None or req["requester_id"] != user["id"]:
+        write_audit(db, user, "customer.export", f"export_request/{rid}", "not your request", ip, "denied")
+        db.commit()
+        raise HTTPException(404, "요청을 찾을 수 없습니다")
+    if req["status"] != "approved":
+        write_audit(db, user, "customer.export", f"export_request/{rid}", f"not approved: {req['status']}", ip, "denied")
+        db.commit()
+        raise HTTPException(403, "승인되지 않았거나 이미 사용된 요청입니다")
+    decided = datetime.fromisoformat(req["decided"])
+    if datetime.now(timezone.utc) - decided > timedelta(minutes=config.EXPORT_APPROVAL_TTL_MIN):
+        db.execute("UPDATE export_requests SET status='expired' WHERE id=?", (rid,))
+        write_audit(db, user, "customer.export", f"export_request/{rid}", "approval expired", ip, "denied")
+        db.commit()
+        raise HTTPException(403, "승인이 만료되었습니다. 다시 요청하세요")
+    db.execute("UPDATE export_requests SET status='used' WHERE id=?", (rid,))
+    db.commit()
+    return _serve_export(db, user, ip, req["limit_rows"], req["reason"])
 
 
 @app.get("/customers/{cid}")
