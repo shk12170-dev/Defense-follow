@@ -23,6 +23,17 @@ def code_for(secret, at=None):
     return f"{num:0{DIGITS}d}"
 
 
+def match_step(secret, code, at=None, window=1):
+    """코드가 맞으면 해당 30초 구간 번호(counter)를, 아니면 None을 돌려준다. 재사용 방지에 쓴다."""
+    if not code or not code.isdigit() or len(code) != DIGITS:
+        return None
+    now = time.time() if at is None else at
+    for i in range(-window, window + 1):
+        if hmac.compare_digest(code_for(secret, now + i * STEP), code):
+            return int((now + i * STEP) // STEP)
+    return None
+
+
 def verify(secret, code, at=None, window=1):
     """현재 구간과 앞뒤 window 구간의 코드를 허용한다(시계 오차 대응)."""
     if not code or not code.isdigit() or len(code) != DIGITS:

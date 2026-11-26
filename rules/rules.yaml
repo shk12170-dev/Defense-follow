@@ -13,6 +13,13 @@ quota:
     - hours: 168
       rows: {agent: 7000, admin: 8000}
 
+# 로그인 스로틀: 같은 (아이디, IP)에서 window_min 안에 max_failures_per_user_ip회 실패하거나 같은 IP에서 max_failures_per_ip회 실패하면
+# 그 조합의 로그인을 window_min 동안 거부한다(HTTP 429). 계정 자체는 잠그지 않아, 공격자가 남의 계정을 잠가 업무를 막는 것을 피한다.
+login_throttle:
+  window_min: 10
+  max_failures_per_user_ip: 5
+  max_failures_per_ip: 20
+
 # 고객정보 접근으로 간주하는 동작 (result=ok 인 것만 집계)
 data_actions:
   - customer.list
@@ -127,6 +134,18 @@ rules:
     response: stepup
     escalate_min: 1440
     mitre: T1087
+
+  - id: R12
+    name: 로그인 실패 반복(스로틀)
+    description: 같은 아이디·IP 조합의 로그인 실패가 반복되어 서버가 로그인을 일시 거부함(비밀번호 대입·계정 정보 재사용 징후). 계정은 잠그지 않고 경고
+    type: event_match
+    actions: [auth.login]
+    results: [blocked]
+    detail_contains: ["login throttle"]
+    cooldown_min: 10
+    severity: medium
+    lock: false
+    mitre: T1110
 
   - id: R7
     name: 대량 조회 직후 내보내기 차단

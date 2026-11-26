@@ -48,9 +48,28 @@ def _scope(user):
     return "1=1", []
 
 
+def _login_throttled(db, username, ip):
+    """최근 실패 로그인 횟수로 이 (아이디, IP) 또는 이 IP의 로그인을 일시 거부할지 판단한다."""
+    cfg = quota.rules().get("login_throttle")
+    if not cfg or not config.defense_enabled():
+        return False
+    since = (datetime.now(timezone.utc) - timedelta(minutes=cfg["window_min"])).isoformat(timespec="milliseconds")
+    by_user_ip = db.execute(
+        "SELECT COUNT(*) FROM audit_logs WHERE action='auth.login' AND result='failed' AND ts>=? AND ip=? AND detail=?",
+        (since, ip, f"username={username}")).fetchone()[0]
+    by_ip = db.execute(
+        "SELECT COUNT(*) FROM audit_logs WHERE action='auth.login' AND result='failed' AND ts>=? AND ip=?",
+        (since, ip)).fetchone()[0]
+    return by_user_ip >= cfg["max_failures_per_user_ip"] or by_ip >= cfg["max_failures_per_ip"]
+
+
 @app.post("/auth/login")
 def login(body: LoginIn, request: Request, db=Depends(get_db)):
     ip = client_ip(request)
+    if _login_throttled(db, body.username, ip):  # 비밀번호 검증 전에 거부한다 (아이디 존재 여부와 무관하게 같은 응답)
+        write_audit(db, None, "auth.login", None, f"login throttle username={body.username}", ip, "blocked")
+        db.commit()
+        raise HTTPException(429, "로그인 시도가 너무 많습니다. 잠시 후 다시 시도하세요")
     user = db.execute("SELECT * FROM users WHERE username=?", (body.username,)).fetchone()
     if user is None or not verify_password(body.password, user["password_hash"]):
         write_audit(db, user, "auth.login", None, f"username={body.username}", ip, "failed")
@@ -79,8 +98,10 @@ def stepup(body: StepupIn, request: Request, user=Depends(authenticated_user), d
         return {"status": "not_required"}
     if len(body.reason.strip()) < 5:
         raise HTTPException(400, "사유(5자 이상)가 필요합니다")
-    if not totp.verify(user["totp_secret"] or "", body.code.strip()):
-        write_audit(db, user, "auth.stepup", None, "wrong code", ip, "failed")
+    step = totp.match_step(user["totp_secret"] or "", body.code.strip())
+    replayed = step is not None and step <= (user["totp_last_step"] or 0)  # 이미 쓴 코드(또는 더 이전 구간)는 재사용할 수 없다
+    if step is None or replayed:
+        write_audit(db, user, "auth.stepup", None, "replayed code" if replayed else "wrong code", ip, "failed")
         recent = db.execute(
             "SELECT COUNT(*) FROM audit_logs WHERE user_id=? AND action='auth.stepup' AND result='failed' AND ts>=?",
             (user["id"], (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat(timespec="milliseconds"))).fetchone()[0]
@@ -91,7 +112,7 @@ def stepup(body: StepupIn, request: Request, user=Depends(authenticated_user), d
             raise HTTPException(403, "인증 실패가 반복되어 계정이 잠겼습니다")
         db.commit()
         raise HTTPException(401, "인증 코드가 올바르지 않습니다")
-    db.execute("UPDATE users SET stepup_required=0 WHERE id=?", (user["id"],))
+    db.execute("UPDATE users SET stepup_required=0, totp_last_step=? WHERE id=?", (step, user["id"]))
     write_audit(db, user, "auth.stepup", None, f"reason={body.reason.strip()}", ip, "ok")
     response.after_stepup(user["username"])
     return {"status": "verified"}

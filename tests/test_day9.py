@@ -140,7 +140,7 @@ def test_other_users_reads_do_not_block_my_export(client):
 
 
 def test_warn_stage_does_not_lock_account(client):
-    """경고 단계 경보는 계정을 잠그지 않고 response.warn 이벤트만 남긴다."""
+    """1단계 경보(R5)는 계정을 잠그지 않고 재인증 요구(response.stepup) 이벤트만 남긴다."""
     from app import db as dbm
     from app import response
     conn = dbm.connect()
@@ -166,4 +166,5 @@ def test_warn_stage_does_not_lock_account(client):
     assert status_of("agent02") == "active"
     a = tok(client, "admin02")
     assert any(x["rule_id"] == "R5" for x in client.get("/alerts", headers=a).json()["items"])
-    assert client.get("/audit?action=response.warn", headers=a).json()["count"] >= 1
+    assert client.get("/audit?action=response.stepup", headers=a).json()["count"] >= 1
+    assert client.get("/audit?action=response.lock", headers=a).json()["count"] == 0

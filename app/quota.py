@@ -23,6 +23,11 @@ def _load():
     return _rules
 
 
+def rules():
+    """로드한 규칙 설정 전체 (다른 모듈이 같은 캐시를 쓰도록 공개)."""
+    return _load()
+
+
 def windows():
     """[{hours, rows:{role: 건수}}...]. 예전 형식(window_hours + rows)도 읽는다."""
     q = _load().get("quota") or {}
