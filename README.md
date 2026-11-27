@@ -97,6 +97,7 @@ python -m venv .venv
    ```powershell
    .venv\Scripts\python scripts\attack_sim.py
    ```
+   시나리오 7개를 순서대로 실행합니다(1 대량 조회 / 2 새벽 접근 / 3 퇴사자 계정 / 4 대량 조회 후 반출 / 5 분산 IP 스프레이 / 6 토큰 탈취 / 7 원문 조회 반복). `--only 6 7`처럼 골라 실행할 수 있고, 5·6은 서버를 `DEFENSE_TRUSTED_PROXY=on`으로 띄워야 의미가 있습니다.
 3. 대시보드가 3초 안에 갱신됩니다: 경보 → 계정 자동 잠금 → 이벤트 기록.
 4. "잠금 해제" 버튼으로 오탐을 복구합니다. 이후 [대응 플레이북](docs/대응플레이북.md) 순서로 범위를 산정합니다.
 5. 방어 OFF/ON 비교는 `scripts\benchmark.py`를 실행하면 `docs/`에 결과가 생성됩니다 (약 1~2분).
