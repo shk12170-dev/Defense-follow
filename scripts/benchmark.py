@@ -88,7 +88,9 @@ def scenario_bulk(c):
             break
         rows += len(r.json()["items"])
     return {"rows": rows, "blocked": blocked_at is not None, "block_request": blocked_at,
-            "block_ms": block_ms, "alert_delay_ms": first_alert_delay_ms("R1", t_start),
+            "block_ms": block_ms,
+            "alert_delay_ms": first_alert_delay_ms("R1", t_start) if first_alert_delay_ms("R1", t_start) is not None
+            else first_alert_delay_ms("R9", t_start),
             "alerts": len(db_rows("SELECT 1 FROM alerts WHERE username='agent01'"))}
 
 
@@ -109,7 +111,7 @@ def scenario_exfil(c):
     t_start = datetime.now(timezone.utc)
     rows = 0
     for p in range(1, 6):
-        rows += len(c.get(f"/customers?page={p}&size=50", headers=h).json()["items"])
+        rows += len(c.get(f"/customers?page={p}&size=50", headers=h).json().get("items", []))  # 쿼터에 걸리면 items 없음
     exports, blocked = 0, False
     for _ in range(5):  # 공격자가 반복해서 내보내기를 시도
         r = c.get("/customers/export?limit=1000&reason=점검용 반출 시험", headers=h)
@@ -123,6 +125,8 @@ def scenario_exfil(c):
     delay = first_alert_delay_ms("R7", t_start)
     if delay is None:
         delay = first_alert_delay_ms("R4", t_start)
+    if delay is None:
+        delay = first_alert_delay_ms("R9", t_start)
     return {"rows": rows, "exports_done": exports, "blocked": blocked, "final_status": status,
             "alert_delay_ms": delay,
             "alerts": len(db_rows("SELECT 1 FROM alerts WHERE rule_id IN ('R4','R7')"))}
@@ -134,7 +138,7 @@ def run_scenarios(mode, n_customers):
 
 
 # ---------------- 2. 오버헤드 ----------------
-def run_overhead(mode, n_customers, per_agent=120):
+def run_overhead(mode, n_customers, per_agent=90):  # 상세 조회 10분 한도(100건)보다 적게: 정상 요청만 측정
     with make_app(mode, n_customers) as c:
         agents = [f"agent0{i}" for i in range(1, 6)]
         heads = {a: login(c, a) for a in agents}
@@ -165,7 +169,8 @@ def _detector(threshold):
     return Detector(cfg)
 
 
-def run_false_positive(days=30, seed=7, threshold=300):
+def normal_events(days=30, seed=7):
+    """합성 정상 업무 로그(상담원 5명 + 관리자 1명). 오탐 평가와 쿼터 측정이 같은 데이터를 쓴다."""
     rnd = random.Random(seed)
     events = []
 
@@ -191,6 +196,11 @@ def run_false_positive(days=30, seed=7, threshold=300):
         t = day + timedelta(hours=10)  # 관리자: 오전 조회 후 100건 내보내기
         events.append(ev(t, "admin01", "customer.view", 1))
         events.append(ev(t + timedelta(minutes=30), "admin01", "customer.export", 100))
+    return events
+
+
+def run_false_positive(days=30, seed=7, threshold=300):
+    events = normal_events(days, seed)
     alerts = _detector(threshold).run(events)
     locks = [a for a in alerts if _is_lock(a)]
     stepups = [a for a in alerts if _is_stepup(a)]
@@ -290,6 +300,24 @@ def run_multiday(days=14, per_day_list=(700, 1000, 1450)):
     return out
 
 
+# ---------------- 4-3. 쿼터 프로필 (유형별·10분·재인증 후 축소·마스킹 해제 별도) ----------------
+def run_quota_study():
+    """쿼터 설정별 정상 업무 오탐과 공격 유출을 합성 30일 로그로 측정한다 (scripts/quota_study.py)."""
+    import quota_study as qs
+    from app import quota
+    from app.detection import load_rules
+    q = load_rules()["quota"]
+    std, strict = quota.profile_config(q, "standard"), quota.profile_config(q, "strict")
+    ev = normal_events()
+    configs = {
+        "이전 (24시간·7일 합계 한도만)": qs.make_cfg(),
+        "표준 프로필": std,
+        "엄격 프로필": strict,
+        "엄격 프로필 + 목록 열람 없는 업무(상세·검색만)": (strict, qs.no_list_events(ev)),
+    }
+    return qs.study(configs, ev)
+
+
 # ---------------- 5. 임계값 트레이드오프 ----------------
 def run_tradeoff(thresholds=(200, 300, 400, 500)):
     out = []
@@ -370,6 +398,12 @@ def build_sections(res):
     imp.append(["정상 업무 오탐으로 인한 계정 잠금", "1건 (0.67%)", f"{fp['locks']}건 ({rate:.2f}%) · 재인증 요구 {fp['stepups']}건(R1 {fp['blocks']}건 포함) · 경고 {fp['warns']}건"])
     md_rows = [[f"하루 {m['per_day']:,}건", fmt(m["no_quota"], "건"), fmt(m["quota_24h"], "건"),
                 fmt(m["quota_24h_7d"], "건"), fmt(m["last_day"], "건")] for m in res.get("multiday", [])]
+    qs_rows = []
+    for r in res.get("quota_study", []):
+        n = r["normal"]
+        qs_rows.append([r["name"], f"{n['agent_blocked_days']}/{n['agent_days']}일 ({n['agent_blocked_days'] / n['agent_days'] * 100:.1f}%)",
+                        fmt(r["s1_agent_list"], "건"), fmt(r["s4_admin_list"], "건"), fmt(r["day_agent"], "건"),
+                        fmt(r["day_agent_after_stepup"], "건"), fmt(r["d14_1450"], "건")])
     return [
         ("시나리오 1: 상담원 대량 조회 (R1, 쿠팡형)", ["지표", "방어 OFF", "방어 ON"], s1),
         ("시나리오 3: 퇴사자·휴면 계정 접근 (R3)", ["지표", "방어 OFF", "방어 ON"], s3),
@@ -378,6 +412,7 @@ def build_sections(res):
         ("2차 보완 전후 비교 (누적 조회량·단계적 대응·반출 사전 차단)", ["항목", "1차 구현", "2차 보완"], imp),
         ("오탐 평가 (R1 임계값 300건/10분)", ["대상", "결과", "규칙별"], fp_rows),
         ("임계값 조정: 오탐 대 유출 (R1)", ["R1 임계값", "정상 업무로 인한 차단(재인증 또는 잠금)", "분당 60건 공격 시 유출"], to_rows),
+        ("쿼터 프로필 비교: 정상 업무 오탐 대 유출 상한", ["설정", "정상 업무 오탐(상담원)", "S1 목록", "S4 관리자 목록", "하루 최대", "재인증 후 하루", "14일×1,450건"], qs_rows),
         ("다일 누적 유출 (14일, 매일 같은 양을 가져가는 상담원)", ["일일 조회량", "쿼터 없음", "24시간 쿼터만", "24시간+7일 쿼터", "마지막 날 반환량"], md_rows),
         ("저속 공격 분석 (8시간 지속, R1·R5·R6 적용)", ["조회 속도", "1단계 경고", "2단계 차단(재인증 또는 잠금)", "유출 건수(탐지만)", f"유출 상한(하드 쿼터 {QUOTA_AGENT:,}건 적용)"], ev_rows),
     ]
@@ -391,6 +426,7 @@ NOTES = [
     "오탐 평가는 무작위로 만든 합성 로그이며 실제 업무 패턴 검증이 아니다. 오탐으로 잠기면 정상 상담원이 업무를 못 하므로, 운영 적용 전에는 실제 로그로 임계값을 조정해야 한다. 경고 단계(R5)는 계정을 잠그지 않는다.",
     "임계값을 올리면 잠금 오탐은 줄지만 공격 시 유출되는 건수가 늘어난다. 둘 사이의 균형이 규칙 튜닝의 핵심이다.",
     "하드 쿼터(상담원 1,500건/24시간)는 속도와 관계없이 반환 전에 적용되므로 유출 상한이 쿼터로 고정된다. 위 표의 쿼터 열은 탐지 결과와 쿼터 상한 중 작은 값이며, 서버가 실제로 상한을 지키는지는 tests/test_day11_quota.py가 검증한다.",
+    "쿼터 프로필: 정상 업무 오탐은 '한도에 걸린 요청이 하루에 한 번이라도 있었던 상담원·일'로 센다(합성 로그는 상담원이 목록을 하루 평균 457건 넘겨 본다고 가정). 표준 프로필은 그 가정에서도 오탐이 적고, 엄격 프로필은 유출 상한이 크게 줄지만 목록 열람이 잦은 업무를 막는다. 목록 열람을 하지 않는 업무(상세·검색만, 목록 이벤트를 제거한 가정)에서는 엄격 프로필의 오탐이 거의 없다.",
     "단계적 대응: R1·R5·R8은 먼저 재인증(TOTP+사유)을 요구하고, R1은 재인증 후 다시 기준을 넘으면 잠근다. 정상 사용자는 재인증 한 번으로 업무를 이어가므로 잠금 오탐이 줄지만, 유효한 인증 코드를 가진 내부자는 재인증을 통과할 수 있어 R1 기준 유출은 최대 약 2배(재인증 전 300건 + 재인증 후 다시 300건)까지 늘 수 있다. 하드 쿼터·R6가 그 위의 상한이다.",
     "다일 누적: 24시간 쿼터만으로는 하루 한도(1,500건) 미만으로 매일 가져가는 공격을 막지 못한다. 7일 쿼터(상담원 7,000건)를 더하면 14일 유출이 크게 줄지만, 7일 쿼터 미만으로 천천히(하루 약 1,000건 이하) 가져가면 여전히 막지 못하며, 이는 정상 업무량(합성 기준 하루 평균 740건)과 구분되지 않는다.",
     "저속 공격: 하루 누적 1,200건(경고)·2,000건(차단) 미만이면 여전히 탐지하지 못한다(분당 약 2.5건 이하로 8시간). 사용자별 기준선 규칙(R8)은 평소 조회량이 적은 사용자의 급증만 잡고, 평소 하루 800건 넘게 보는 상담원에는 효과가 없다(tests/test_day10_baseline.py).",
@@ -446,6 +482,7 @@ def main():
     res["evasion"] = run_evasion()
     res["tradeoff"] = run_tradeoff()
     res["multiday"] = run_multiday()
+    res["quota_study"] = run_quota_study()
 
     docs = ROOT / "docs"
     docs.mkdir(exist_ok=True)

@@ -126,7 +126,7 @@
   <table>
     <tr><th>시나리오</th><th>방어 OFF / 1차</th><th>2차 보완 후</th></tr>
     <tr><td>상담원 대량 조회 (쿠팡형)</td><td class="num bad">805건 확보</td><td class="num good">300건에서 차단</td></tr>
-    <tr><td>조회 후 외부 반출 (롯데카드형)</td><td class="num bad">5,250건 (1차 ON: 1,250건)</td><td class="num good">250건, 내보내기 0회 성공</td></tr>
+    <tr><td>조회 후 외부 반출 (롯데카드형)</td><td class="num bad">5,250건 (1차 ON: 1,250건)</td><td class="num good">200건, 내보내기 0회 성공</td></tr>
     <tr><td>분당 10건 저속 공격 (8시간)</td><td class="num bad">4,800건, 탐지 못함</td><td class="num good">2,000건에서 차단</td></tr>
     <tr><td>첫 경보까지</td><td class="num bad">경고 없음</td><td class="num good">약 80~110ms</td></tr>
     <tr><td>정상 요청 평균 응답</td><td class="num">13.62ms</td><td class="num">13.86ms (+2%)</td></tr>
@@ -159,7 +159,7 @@
     <div class="card"><span class="tag">보완</span><h3>R5·R6·R7·R8</h3>
       <p>누적 조회 2단계 대응, 반출 사전 차단, 개인 기준선.</p></div>
     <div class="card"><span class="tag green">재측정</span><h3>결과</h3>
-      <p>반출 1,250 → 250건, 저속 공격 미탐 → 2,000건에서 차단.</p></div>
+      <p>반출 1,250 → 200건, 저속 공격 미탐 → 하루 1,400건 상한.</p></div>
   </div>
   <div class="grid g2" style="margin-top:20px">
     <div class="card"><h3>임계값은 측정해서 정했습니다</h3>
@@ -202,8 +202,8 @@
   <h2>정리</h2>
   <div class="grid g3" style="margin-top:12px">
     <div style="font-size:20px"><div class="big" style="color:#7fb0ff">13</div>탐지 규칙 + Sigma 8파일</div>
-    <div style="font-size:20px"><div class="big" style="color:#7fb0ff">163</div>자동 테스트 (GitHub Actions)</div>
-    <div style="font-size:20px"><div class="big" style="color:#7fb0ff">1,250 → 250</div>반출 건수 (사전 차단)</div>
+    <div style="font-size:20px"><div class="big" style="color:#7fb0ff">179</div>자동 테스트 (GitHub Actions)</div>
+    <div style="font-size:20px"><div class="big" style="color:#7fb0ff">1,250 → 200</div>반출 건수 (사전 차단)</div>
   </div>
   <p style="margin-top:44px;font-size:24px">접근통제·마스킹만으로는 정상 권한의 내부자를 막지 못하고,<br>사후 탐지만으로는 첫 피해를 막지 못합니다.<br><b style="color:#fff">두 계층과 사전 차단을 함께 두고, 측정으로 규칙을 고치는 순환이 핵심입니다.</b></p>
   <p style="margin-top:36px;font-size:18px;color:#8fa3bf">다음 단계: 실제 로그 기반 임계값 튜닝 · 역할별 기준선 · 잠금 전 관리자 확인 · SIEM 실행 검증</p>

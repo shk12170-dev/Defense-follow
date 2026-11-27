@@ -1,5 +1,5 @@
 {
-  "generated": "2026-11-26 10:59 KST",
+  "generated": "2026-11-27 10:11 KST",
   "customers": 4000,
   "scenarios": {
     "off": {
@@ -27,38 +27,38 @@
     },
     "on": {
       "bulk": {
-        "rows": 300,
+        "rows": 200,
         "blocked": true,
-        "block_request": 7,
-        "block_ms": 114,
-        "alert_delay_ms": 87,
+        "block_request": 5,
+        "block_ms": 99,
+        "alert_delay_ms": 76,
         "alerts": 1
       },
       "dormant": {
         "login_denied": true,
-        "alert_delay_ms": 105,
+        "alert_delay_ms": 103,
         "alerts": 2
       },
       "exfil": {
-        "rows": 250,
+        "rows": 200,
         "exports_done": 0,
         "blocked": true,
         "final_status": "active",
-        "alert_delay_ms": 76,
+        "alert_delay_ms": 105,
         "alerts": 1
       }
     }
   },
   "overhead": {
     "off": {
-      "requests": 600,
-      "mean_ms": 11.42,
-      "p95_ms": 12.79
+      "requests": 450,
+      "mean_ms": 15.26,
+      "p95_ms": 18.17
     },
     "on": {
-      "requests": 600,
-      "mean_ms": 11.99,
-      "p95_ms": 13.01
+      "requests": 450,
+      "mean_ms": 16.05,
+      "p95_ms": 18.93
     }
   },
   "false_positive": {
@@ -235,6 +235,68 @@
       "quota_24h": 20300,
       "quota_24h_7d": 14000,
       "last_day": 0
+    }
+  ],
+  "quota_study": [
+    {
+      "name": "이전 (24시간·7일 합계 한도만)",
+      "normal": {
+        "agent_days": 150,
+        "agent_blocked_days": 0,
+        "admin_blocked_days": 0,
+        "denied_pct": 0.0,
+        "week_max": 6118
+      },
+      "s1_agent_list": 1500,
+      "s4_admin_list": 2000,
+      "day_agent": 1500,
+      "day_agent_after_stepup": 1500,
+      "d14_1450": 14000
+    },
+    {
+      "name": "표준 프로필",
+      "normal": {
+        "agent_days": 150,
+        "agent_blocked_days": 8,
+        "admin_blocked_days": 0,
+        "denied_pct": 0.5440123543450793,
+        "week_max": 6058
+      },
+      "s1_agent_list": 200,
+      "s4_admin_list": 200,
+      "day_agent": 1400,
+      "day_agent_after_stepup": 700,
+      "d14_1450": 14000
+    },
+    {
+      "name": "엄격 프로필",
+      "normal": {
+        "agent_days": 150,
+        "agent_blocked_days": 143,
+        "admin_blocked_days": 0,
+        "denied_pct": 32.47753755440124,
+        "week_max": 3500
+      },
+      "s1_agent_list": 100,
+      "s4_admin_list": 100,
+      "day_agent": 800,
+      "day_agent_after_stepup": 400,
+      "d14_1450": 7000
+    },
+    {
+      "name": "엄격 프로필 + 목록 열람 없는 업무(상세·검색만)",
+      "normal": {
+        "agent_days": 150,
+        "agent_blocked_days": 0,
+        "admin_blocked_days": 0,
+        "denied_pct": 0.0,
+        "week_max": 2165
+      },
+      "s1_agent_list": 100,
+      "s4_admin_list": 100,
+      "day_agent": 800,
+      "day_agent_after_stepup": 400,
+      "d14_1450": 7000
     }
   ]
 }

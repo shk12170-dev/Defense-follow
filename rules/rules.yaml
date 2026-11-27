@@ -2,16 +2,41 @@
 # 시간대는 한국 표준시(UTC+9) 기준으로 판단한다.
 utc_offset_hours: 9
 
-# 서버 하드 쿼터: 각 기간 동안 한 사용자에게 내줄 수 있는 고객정보 건수의 상한 (탐지와 별개로 반환 전에 적용, 가장 빡빡한 창이 적용됨)
-# 24시간: 합성 정상 업무 30일에서 상담원 일일 조회량은 평균 740·최대 1,202건 -> 1,500건은 정상 업무를 막지 않는다
-# 7일: 같은 데이터에서 상담원 7일 누적은 평균 5,118·최대 6,118건 -> 7,000건은 정상 업무를 막지 않고,
-#      쿼터 미만(하루 1,450건 등)으로 매일 가져가는 다일 누적 유출을 막는다 (합성 데이터는 주 7일 근무라 실제 업무일 수와 다를 수 있음)
+# 서버 하드 쿼터: 데이터를 반환하기 전에 적용하는 건수 상한. 세 종류를 함께 적용하고 가장 빡빡한 것이 이긴다.
+#  windows         : 모든 조회를 합친 기간별 한도. 24시간(합성 정상 업무 최대 1,202건), 7일(최대 6,118건) 위로 잡아 정상 업무를 막지 않는다.
+#  profiles.*.limits: 조회 유형별 한도(상세·검색 / 목록 / 마스킹 해제)와 10분 같은 짧은 창. 한꺼번에 많이 가져가는 것을 제한한다.
+#  stepup_penalty  : 재인증을 통과한 직후 한도를 줄인다(본인 인증 코드를 가진 내부자가 재인증만으로 한도를 되찾지 못하게).
+# 프로필은 환경변수 DEFENSE_QUOTA_PROFILE 로 바꾼다. 측정 결과(오탐·유출)는 docs/benchmark.md 와 scripts/quota_study.py 참고.
+#  standard: 합성 정상 업무에서 상담원이 목록을 하루 평균 457건(최대 880건) 넘겨 본다는 가정에서도 오탐이 거의 없는 기본값
+#  strict  : 유출 상한을 크게 줄이지만 목록 열람이 잦은 업무에서는 정상 업무를 막는다. 목록 열람을 필터·검색 중심으로 바꾼 뒤 쓴다
 quota:
+  profile: standard
   windows:
     - hours: 24
       rows: {agent: 1500, admin: 2000}
     - hours: 168
       rows: {agent: 7000, admin: 8000}
+  stepup_penalty: {hours: 24, factor: 0.5}
+  profiles:
+    standard:
+      limits:
+        - {name: "상세·검색", actions: [customer.view, customer.search], minutes: 10, rows: {agent: 100, admin: 100}}
+        - {name: "상세·검색", actions: [customer.view, customer.search], minutes: 1440, rows: {agent: 500, admin: 500}}
+        - {name: "목록", actions: [customer.list], minutes: 10, rows: {agent: 200, admin: 200}}
+        - {name: "목록", actions: [customer.list], minutes: 1440, rows: {agent: 900, admin: 900}}
+        - {name: "마스킹 해제", actions: [customer.unmask], minutes: 1440, rows: {admin: 20}}
+    strict:
+      windows:
+        - hours: 24
+          rows: {agent: 800, admin: 2000}
+        - hours: 168
+          rows: {agent: 3500, admin: 8000}
+      limits:
+        - {name: "상세·검색", actions: [customer.view, customer.search], minutes: 10, rows: {agent: 100, admin: 100}}
+        - {name: "상세·검색", actions: [customer.view, customer.search], minutes: 1440, rows: {agent: 500, admin: 500}}
+        - {name: "목록", actions: [customer.list], minutes: 10, rows: {agent: 100, admin: 100}}
+        - {name: "목록", actions: [customer.list], minutes: 1440, rows: {agent: 300, admin: 300}}
+        - {name: "마스킹 해제", actions: [customer.unmask], minutes: 1440, rows: {admin: 20}}
 
 # 로그인 스로틀: 같은 (아이디, IP)에서 window_min 안에 max_failures_per_user_ip회 실패하거나 같은 IP에서 max_failures_per_ip회 실패하면
 # 그 조합의 로그인을 window_min 동안 거부한다(HTTP 429). 계정 자체는 잠그지 않아, 공격자가 남의 계정을 잠가 업무를 막는 것을 피한다.
