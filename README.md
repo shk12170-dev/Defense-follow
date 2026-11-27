@@ -160,6 +160,7 @@ docs/         보고서, 플레이북, 비교 결과, 스크린샷, 발표 자�
 ## 발표 자료
 - **[docs/presentation.pptx](docs/presentation.pptx)**: 15장짜리 PowerPoint 발표 자료(사고 → 구조 → 규칙 → 측정 결과 → 시연 → 보완 과정 → 3차 보완 → 쿼터 강화 → 시나리오 5·6·7 → 보안 점검 → 한계 → 정리, 발표자 노트 포함)
 - **[docs/사고분석-대응보고서.pdf](docs/사고분석-대응보고서.pdf)**: 보고서 PDF(9쪽, 원문은 [사고분석-대응보고서.md](docs/사고분석-대응보고서.md))
+- [docs/프로젝트-브리핑.md](docs/프로젝트-브리핑.md): 면접·포트폴리오용 설명 가이드(30초·3분 소개, 핵심 수치, 예상 질문과 답변)
 - [docs/presentation.html](docs/presentation.html): 브라우저용 발표 자료(← → 키, F 전체화면)
 
 ## 의존성 점검
