@@ -184,6 +184,18 @@ rules:
     escalate: false
     mitre: T1110
 
+  - id: R14
+    name: 다중 IP 동시 사용(토큰 탈취·계정 공유)
+    description: 한 계정의 고객정보 조회가 짧은 시간에 서로 다른 IP 2개 이상에서 발생. 훔친 로그인 토큰을 다른 곳에서 쓰거나 계정을 공유하는 징후. 정상 사용자의 네트워크 전환과 구분이 어려워 잠그지 않고 재인증(TOTP)을 요구한다. 토큰만 가진 공격자는 인증 코드가 없어 막힌다
+    type: multi_ip_session
+    window_min: 10
+    threshold_ips: 2
+    cooldown_min: 30
+    severity: high
+    response: stepup
+    escalate: false
+    mitre: T1550
+
   - id: R7
     name: 대량 조회 직후 내보내기 차단
     description: 대량 조회 직후의 내보내기를 서버가 사전에 거부한 사건. 반출은 막고, 계정은 잠그지 않은 채 보안 담당자 확인을 요청(lock false)

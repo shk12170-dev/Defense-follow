@@ -4,7 +4,7 @@
 방어 장치(탐지·자동 차단)가 어느 시점에 개입하는지 보여주는 용도다.
 
 사용: python scripts/attack_sim.py [--base http://127.0.0.1:8000] [--only 1 2 3 4]
-시나리오: 1 대량 조회(R1) / 2 새벽 접근(R2, 오프라인 재생) / 3 퇴사자 계정(R3) / 4 대량 조회 후 반출(R4) / 5 분산 IP 비밀번호 스프레이(R13)
+시나리오: 1 대량 조회(R1) / 2 새벽 접근(R2, 오프라인 재생) / 3 퇴사자 계정(R3) / 4 대량 조회 후 반출(R4) / 5 분산 IP 비밀번호 스프레이(R13) / 6 토큰 탈취 후 다른 IP에서 사용(R14)
 """
 import argparse
 import sys
@@ -110,13 +110,36 @@ def s5_spray(sim):
         sim.log(f"데이터 조회: HTTP {r.status_code} -> {verdict}")
 
 
+def s6_token_theft(sim):
+    print("\n=== 시나리오 6: 로그인 토큰 탈취 후 다른 IP에서 사용 (R14) ===")
+    print("(정상 사용자와 공격자가 같은 토큰을 서로 다른 IP에서 쓴다. X-Forwarded-For 위조를 이용하므로")
+    print(" 서버를 DEFENSE_TRUSTED_PROXY=on 으로 띄운 로컬 시연에서만 의미가 있다)")
+    sim.reset_accounts(["agent02"])
+    legit, thief = {"X-Forwarded-For": "198.51.100.10"}, {"X-Forwarded-For": "203.0.113.99"}
+    r = sim.c.post("/auth/login", json={"username": "agent02", "password": DEMO_PASSWORD}, headers=legit)
+    token = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    r = sim.c.get("/customers?page=1&size=20", headers={**token, **legit})
+    sim.log(f"정상 사용자(IP 198.51.100.10) 조회: HTTP {r.status_code}")
+    got = 0
+    for i in range(1, 6):
+        r = sim.c.get(f"/customers?page={i + 1}&size=50", headers={**token, **thief})
+        if r.status_code != 200:
+            sim.log(f"탈취한 토큰(IP 203.0.113.99) 요청 {i}: HTTP {r.status_code} -> 차단됨 ({r.json().get('detail')})")
+            break
+        got += len(r.json()["items"])
+        sim.log(f"탈취한 토큰(IP 203.0.113.99) 요청 {i}: 누적 {got}건 확보")
+    print(f"결과: 토큰만 가진 공격자는 {got}건 확보 후 차단 (인증 코드가 없어 재인증을 통과할 수 없음)")
+    r = sim.c.get("/customers?page=1&size=10", headers={**token, **legit})
+    sim.log(f"같은 계정의 정상 사용자 다음 요청: HTTP {r.status_code} (정상 사용자도 재인증 전까지 막힘: 계정 단위 대응의 비용)")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://127.0.0.1:8000")
-    ap.add_argument("--only", nargs="*", type=int, default=[1, 2, 3, 4, 5])
+    ap.add_argument("--only", nargs="*", type=int, default=[1, 2, 3, 4, 5, 6])
     args = ap.parse_args()
     sim = Sim(args.base)
-    steps = {1: s1_bulk, 2: s2_off_hours, 3: s3_dormant, 4: s4_exfil, 5: s5_spray}
+    steps = {1: s1_bulk, 2: s2_off_hours, 3: s3_dormant, 4: s4_exfil, 5: s5_spray, 6: s6_token_theft}
     for n in args.only:
         steps[n](sim)
     print("\n경보 확인: GET /alerts (admin 로그인 필요)")

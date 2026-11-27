@@ -1,0 +1,45 @@
+# 규칙 R14(다중 IP 동시 사용: 토큰 탈취·계정 공유)의 Sigma 상관(correlation) 표현.
+# 한 계정(username)의 고객정보 조회가 10분 안에 서로 다른 IP 2개 이상에서 발생하면 탐지한다 (value_count).
+# 정확한 기준은 rules/rules.yaml의 R14(threshold_ips)이다.
+title: Customer Data Read By Existing Account
+id: 7b3d9e25-4c18-4a61-9f02-3d8a1e5c7b15
+name: defense_customer_data_read
+status: experimental
+description: 고객정보 조회 성공 이벤트
+author: Defense-follow
+date: 2026-11-27
+logsource:
+  product: defense_follow
+  service: audit
+detection:
+  selection:
+    action|startswith: 'customer.'
+    result: ok
+  condition: selection
+level: informational
+---
+title: One Account Reading Customer Data From Multiple IPs (R14)
+id: 4e8a2c71-9d36-4b05-a1f8-6c2b7d9e3a16
+status: experimental
+description: >
+  한 계정의 조회가 10분 안에 서로 다른 IP 2개 이상에서 발생 (R14).
+  훔친 로그인 토큰을 다른 곳에서 쓰거나 계정을 공유하는 징후다. 탐지 엔진은 계정을 잠그지 않고 재인증(TOTP)을 요구해,
+  토큰만 가진 공격자는 인증 코드가 없어 막히게 한다.
+author: Defense-follow
+date: 2026-11-27
+tags:
+  - attack.defense_evasion
+  - attack.t1550
+correlation:
+  type: value_count
+  rules:
+    - defense_customer_data_read
+  group-by:
+    - username
+  timespan: 10m
+  condition:
+    gte: 2
+    field: ip
+falsepositives:
+  - 정상 사용자가 Wi-Fi와 모바일 데이터를 오가거나 VPN을 켜고 끄는 경우 (잠그지 않고 재인증만 요구하는 이유)
+level: high

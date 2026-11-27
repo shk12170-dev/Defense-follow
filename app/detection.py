@@ -54,6 +54,7 @@ class Detector:
         self.tz = timezone(timedelta(hours=self.cfg.get("utc_offset_hours", 9)))
         self.hist = {}        # user_key -> deque[(dt, rows, action)]
         self.last_fired = {}  # (rule_id, user_key) -> dt
+        self.data_ips = {}    # user_key -> deque[(dt, ip)]: 조회 요청의 접속 IP 이력 (R14용)
         self.fail_ips = {}    # username -> deque[(dt, ip)]: 로그인 실패 이력 (R13용)
         self.denied = {}      # user_key -> deque[dt]: 접근 거부(범위 밖 조회 시도) 이력 (R11용)
         self.floor = {}       # (rule_id, user_key) -> dt: 재인증 이후부터 다시 세는 기준 시각 (volume 규칙의 창 초기화)
@@ -101,6 +102,12 @@ class Detector:
         dt = _parse(ev["ts"])
         key = _user_key(ev)
         is_data = ev["action"] in self.data_actions and ev["result"] == "ok"
+
+        if is_data and ev.get("ip"):
+            dq = self.data_ips.setdefault(key, deque())
+            dq.append((dt, ev["ip"]))
+            while dq and dt - dq[0][0] > _KEEP:
+                dq.popleft()
 
         if ev["action"] == "auth.login" and ev["result"] == "failed" and ev.get("username"):
             fq = self.fail_ips.setdefault(ev["username"], deque())
@@ -191,6 +198,18 @@ class Detector:
             return self._fire(rule, key, dt, ev, {
                 "denied_in_window": n, "window_min": rule["window_min"], "threshold": rule["threshold_count"],
                 "last_resource": ev.get("resource")})
+
+    def _rule_multi_ip_session(self, rule, ev, dt, key, is_data):
+        """한 계정의 조회가 짧은 시간에 서로 다른 여러 IP에서 발생: 로그인 토큰 탈취·계정 공유 징후.
+        정상 사용자가 Wi-Fi와 모바일을 오가면 걸릴 수 있어 잠그지 않고 재인증(TOTP)을 요구한다."""
+        if not is_data or not ev.get("ip"):
+            return None
+        since = dt - timedelta(minutes=rule["window_min"])
+        ips = {ip for t, ip in self.data_ips.get(key, ()) if t >= since}
+        if len(ips) >= rule["threshold_ips"]:
+            return self._fire(rule, key, dt, ev, {
+                "distinct_ips": len(ips), "window_min": rule["window_min"], "threshold": rule["threshold_ips"],
+                "ips": sorted(ips)[:5], "last_action": ev["action"]})
 
     def _rule_login_spray(self, rule, ev, dt, key, is_data):
         """한 계정에 대한 로그인 실패가 여러 서로 다른 IP에서 짧은 시간에 발생: 분산 비밀번호 대입(스프레이).
