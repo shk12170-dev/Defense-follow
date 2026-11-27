@@ -4,7 +4,7 @@
 방어 장치(탐지·자동 차단)가 어느 시점에 개입하는지 보여주는 용도다.
 
 사용: python scripts/attack_sim.py [--base http://127.0.0.1:8000] [--only 1 2 3 4]
-시나리오: 1 대량 조회(R1) / 2 새벽 접근(R2, 오프라인 재생) / 3 퇴사자 계정(R3) / 4 대량 조회 후 반출(R4) / 5 분산 IP 비밀번호 스프레이(R13) / 6 토큰 탈취 후 다른 IP에서 사용(R14)
+시나리오: 1 대량 조회(R1) / 2 새벽 접근(R2, 오프라인 재생) / 3 퇴사자 계정(R3) / 4 대량 조회 후 반출(R4) / 5 분산 IP 비밀번호 스프레이(R13) / 6 토큰 탈취 후 다른 IP에서 사용(R14) / 7 관리자 마스킹 해제 반복(R15)
 """
 import argparse
 import sys
@@ -133,13 +133,28 @@ def s6_token_theft(sim):
     sim.log(f"같은 계정의 정상 사용자 다음 요청: HTTP {r.status_code} (토큰을 발급받은 IP의 정상 사용자는 계속 사용 가능, 428이면 다른 규칙의 재인증 상태)")
 
 
+def s7_unmask(sim):
+    print("\n=== 시나리오 7: 관리자 계정의 마스킹 해제(주민번호 원문) 반복 (R15) ===")
+    print("(사유만 적으면 원문이 열리므로 사유로는 남용을 막지 못한다. 서버는 원문을 연 횟수를 세어 재인증을 요구한다)")
+    sim.reset_accounts(["admin01"])
+    _, h = sim.login("admin01")
+    got = 0
+    for cid in range(1, 31):
+        r = sim.c.get(f"/customers/{cid}?unmask=true&reason=월간 점검용 확인", headers=h)
+        if r.status_code != 200:
+            sim.log(f"원문 조회 {cid}번째: HTTP {r.status_code} -> 차단됨 ({r.json().get('detail')})")
+            break
+        got += 1
+    print(f"결과: 원문 {got}건 확보 후 차단 (재인증 코드가 없으면 이후 조회 불가, 서버 하드 쿼터는 하루 20건)")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://127.0.0.1:8000")
-    ap.add_argument("--only", nargs="*", type=int, default=[1, 2, 3, 4, 5, 6])
+    ap.add_argument("--only", nargs="*", type=int, default=[1, 2, 3, 4, 5, 6, 7])
     args = ap.parse_args()
     sim = Sim(args.base)
-    steps = {1: s1_bulk, 2: s2_off_hours, 3: s3_dormant, 4: s4_exfil, 5: s5_spray, 6: s6_token_theft}
+    steps = {1: s1_bulk, 2: s2_off_hours, 3: s3_dormant, 4: s4_exfil, 5: s5_spray, 6: s6_token_theft, 7: s7_unmask}
     for n in args.only:
         steps[n](sim)
     print("\n경보 확인: GET /alerts (admin 로그인 필요)")

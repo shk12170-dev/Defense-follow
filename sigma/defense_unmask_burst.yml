@@ -1,0 +1,43 @@
+# 규칙 R15(마스킹 해제 반복)의 Sigma 상관(correlation) 표현.
+# 한 계정이 60분 안에 마스킹 해제(주민번호 원문 조회)를 10건 이상 성공하면 탐지한다 (event_count).
+# 정확한 기준은 rules/rules.yaml의 R15(threshold_count)이다.
+title: Customer Unmask Succeeded
+id: 2c6e8a14-7f39-4d52-b0a1-9e3d5c7f1a17
+name: defense_customer_unmask
+status: experimental
+description: 마스킹 해제(원문 조회) 성공 이벤트
+author: Defense-follow
+date: 2026-11-27
+logsource:
+  product: defense_follow
+  service: audit
+detection:
+  selection:
+    action: customer.unmask
+    result: ok
+  condition: selection
+level: informational
+---
+title: Repeated Unmasking Of Customer Data (R15)
+id: 8d1f3b52-6a47-4e90-8c2d-5b7a9e1c3a18
+status: experimental
+description: >
+  한 계정이 60분 안에 마스킹 해제를 10건 이상 성공 (R15). 사유만 적으면 원문이 열리므로 사유로는 남용을 막지 못한다.
+  탐지 엔진은 먼저 재인증(TOTP)을 요구하고 24시간 안에 반복하면 잠근다.
+author: Defense-follow
+date: 2026-11-27
+tags:
+  - attack.collection
+  - attack.t1213
+correlation:
+  type: event_count
+  rules:
+    - defense_customer_unmask
+  group-by:
+    - username
+  timespan: 60m
+  condition:
+    gte: 10
+falsepositives:
+  - 정기 감사·민원 처리로 한 관리자가 원문을 연달아 확인하는 경우 (그래서 잠그지 않고 먼저 재인증을 요구한다)
+level: high

@@ -199,6 +199,18 @@ class Detector:
                 "denied_in_window": n, "window_min": rule["window_min"], "threshold": rule["threshold_count"],
                 "last_resource": ev.get("resource")})
 
+    def _rule_unmask_burst(self, rule, ev, dt, key, is_data):
+        """마스킹 해제(주민번호 원문 조회)가 짧은 시간에 반복: 권한 있는 관리자 계정의 남용·탈취 징후.
+        건수 합계가 아니라 '원문을 연 횟수'를 센다(원문 한 건이 마스킹 조회 한 건보다 훨씬 민감하다)."""
+        if not is_data or ev["action"] != rule["action"]:
+            return None
+        since = dt - timedelta(minutes=rule["window_min"])
+        n = 1 + sum(1 for t, _, act in self.hist.get(key, ()) if t >= since and act == rule["action"])
+        if n >= rule["threshold_count"]:
+            return self._fire(rule, key, dt, ev, {
+                "unmask_in_window": n, "window_min": rule["window_min"], "threshold": rule["threshold_count"],
+                "last_resource": ev.get("resource")})
+
     def _rule_multi_ip_session(self, rule, ev, dt, key, is_data):
         """한 계정의 조회가 짧은 시간에 서로 다른 여러 IP에서 발생: 로그인 토큰 탈취·계정 공유 징후.
         정상 사용자가 Wi-Fi와 모바일을 오가면 걸릴 수 있어 잠그지 않고 재인증(TOTP)을 요구한다."""
