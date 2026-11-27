@@ -139,7 +139,7 @@ rules/        탐지 규칙 (rules.yaml)
 scripts/      seed.py, attack_sim.py, detect.py, benchmark.py, verify_audit.py, kibana_setup.py, docker_start.py, sigma_convert.py
 elk/          Filebeat 설정
 sigma/        Sigma 형식 탐지 규칙
-tests/        pytest 187개 (test_day1~6, test_day8_elk, test_day9, test_day10_baseline)
+tests/        pytest 190개 (test_day1~6, test_day8_elk, test_day9, test_day10_baseline)
 docs/         보고서, 플레이북, 비교 결과, 스크린샷, 발표 자료(presentation.html), 작업일지
 .github/      GitHub Actions (pytest 자동 실행)
 기획서.md      프로젝트 기획서

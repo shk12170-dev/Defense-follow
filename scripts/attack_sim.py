@@ -130,7 +130,7 @@ def s6_token_theft(sim):
         sim.log(f"탈취한 토큰(IP 203.0.113.99) 요청 {i}: 누적 {got}건 확보")
     print(f"결과: 토큰만 가진 공격자는 {got}건 확보 후 차단 (인증 코드가 없어 재인증을 통과할 수 없음)")
     r = sim.c.get("/customers?page=1&size=10", headers={**token, **legit})
-    sim.log(f"같은 계정의 정상 사용자 다음 요청: HTTP {r.status_code} (정상 사용자도 재인증 전까지 막힘: 계정 단위 대응의 비용)")
+    sim.log(f"같은 계정의 정상 사용자 다음 요청: HTTP {r.status_code} (토큰을 발급받은 IP의 정상 사용자는 계속 사용 가능, 428이면 다른 규칙의 재인증 상태)")
 
 
 def main():

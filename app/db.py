@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS users(
   last_login TEXT,
   stepup_required INTEGER NOT NULL DEFAULT 0,
   totp_secret TEXT,
-  totp_last_step INTEGER NOT NULL DEFAULT 0
+  totp_last_step INTEGER NOT NULL DEFAULT 0,
+  stepup_scope TEXT
 );
 CREATE TABLE IF NOT EXISTS customers(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,7 +79,7 @@ def init_db() -> None:
     try:
         conn.executescript(SCHEMA)
         ucols = [r[1] for r in conn.execute("PRAGMA table_info(users)")]
-        for col, ddl in (("stepup_required", "INTEGER NOT NULL DEFAULT 0"), ("totp_secret", "TEXT"), ("totp_last_step", "INTEGER NOT NULL DEFAULT 0")):
+        for col, ddl in (("stepup_required", "INTEGER NOT NULL DEFAULT 0"), ("totp_secret", "TEXT"), ("totp_last_step", "INTEGER NOT NULL DEFAULT 0"), ("stepup_scope", "TEXT")):
             if col not in ucols:  # 기존 DB 마이그레이션
                 conn.execute(f"ALTER TABLE users ADD COLUMN {col} {ddl}")
         cols = [r[1] for r in conn.execute("PRAGMA table_info(customers)")]

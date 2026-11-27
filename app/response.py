@@ -134,7 +134,10 @@ def _on_event(db, ev):
             write_audit(db, user, "response.lock", f"user/{a.username}",
                         f"rule={a.rule_id} {a.rule_name}", ev.get("ip"), "ok")
         elif action == "stepup":
-            db.execute("UPDATE users SET stepup_required=1 WHERE id=?", (user["id"],))
+            rule = next((r for r in _cfg()["rules"] if r["id"] == a.rule_id), {})
+            # stepup_scope가 있는 규칙(R14)은 범위를 좁힌다. 이미 전체 재인증이 걸린 계정은 좁히지 않는다
+            db.execute("UPDATE users SET stepup_scope = CASE WHEN stepup_required=1 AND stepup_scope IS NULL THEN NULL ELSE ? END, "
+                       "stepup_required=1 WHERE id=?", (rule.get("stepup_scope"), user["id"]))
             write_audit(db, user, "response.stepup", f"user/{a.username}",
                         f"rule={a.rule_id} {a.rule_name}", ev.get("ip"), "ok")
         else:

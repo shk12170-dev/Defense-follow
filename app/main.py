@@ -81,7 +81,7 @@ def login(body: LoginIn, request: Request, db=Depends(get_db)):
         raise HTTPException(403, "사용할 수 없는 계정입니다")
     db.execute("UPDATE users SET last_login=datetime('now') WHERE id=?", (user["id"],))
     write_audit(db, user, "auth.login", None, None, ip, "ok")
-    return {"access_token": create_token(user), "token_type": "bearer", "role": user["role"]}
+    return {"access_token": create_token(user, ip), "token_type": "bearer", "role": user["role"]}
 
 
 class StepupIn(BaseModel):
@@ -112,7 +112,7 @@ def stepup(body: StepupIn, request: Request, user=Depends(authenticated_user), d
             raise HTTPException(403, "인증 실패가 반복되어 계정이 잠겼습니다")
         db.commit()
         raise HTTPException(401, "인증 코드가 올바르지 않습니다")
-    db.execute("UPDATE users SET stepup_required=0, totp_last_step=? WHERE id=?", (step, user["id"]))
+    db.execute("UPDATE users SET stepup_required=0, stepup_scope=NULL, totp_last_step=? WHERE id=?", (step, user["id"]))
     write_audit(db, user, "auth.stepup", None, f"reason={body.reason.strip()}", ip, "ok")
     response.after_stepup(user["username"])
     return {"status": "verified"}
@@ -383,7 +383,7 @@ def unlock_user(
         raise HTTPException(404, "사용자를 찾을 수 없습니다")
     if target["status"] != "locked":
         raise HTTPException(409, "잠금 상태의 계정만 해제할 수 있습니다")
-    db.execute("UPDATE users SET status='active', stepup_required=0 WHERE id=?", (target["id"],))
+    db.execute("UPDATE users SET status='active', stepup_required=0, stepup_scope=NULL WHERE id=?", (target["id"],))
     write_audit(db, user, "admin.unlock", f"user/{username}", None, client_ip(request), "ok")
     response.forget(username)
     return {"username": username, "status": "active"}

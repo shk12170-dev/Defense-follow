@@ -193,6 +193,7 @@ rules:
     cooldown_min: 30
     severity: high
     response: stepup
+    stepup_scope: foreign_ip
     escalate: false
     mitre: T1550
 

@@ -27,7 +27,7 @@ def verify_password(pw, stored):
     return hmac.compare_digest(dk.hex(), dk_hex)
 
 
-def create_token(user):
+def create_token(user, ip=None):
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user["id"]),
@@ -35,6 +35,8 @@ def create_token(user):
         "iat": now,
         "exp": now + timedelta(minutes=config.JWT_TTL_MIN),
     }
+    if ip:
+        payload["ip"] = ip  # 로그인한 IP. 다중 IP 경보(R14) 때 이 IP의 요청만 재인증을 면제하는 데 쓴다
     return jwt.encode(payload, config.JWT_SECRET, algorithm=config.JWT_ALG)
 
 
@@ -73,6 +75,7 @@ def authenticated_user(
         write_audit(db, user, "auth.token", request.url.path, "inactive account", ip, "denied")
         db.commit()
         raise HTTPException(403, "비활성 계정입니다")
+    request.state.token_ip = data.get("ip")
     return user
 
 
@@ -83,6 +86,9 @@ def current_user(
 ):
     """일반 엔드포인트용: 단계적 대응으로 재인증이 요구된 계정은 재인증 전까지 요청을 거부한다(428)."""
     if user["stepup_required"] and request.url.path not in _STEPUP_ALLOWED_PATHS:
+        tok_ip = getattr(request.state, "token_ip", None)
+        if user["stepup_scope"] == "foreign_ip" and tok_ip and tok_ip == client_ip(request):
+            return user  # 다중 IP 경보: 토큰을 발급받은 IP의 요청은 통과, 그 밖의 IP만 재인증 요구
         write_audit(db, user, "auth.token", request.url.path, "stepup required", client_ip(request), "denied")
         db.commit()
         raise HTTPException(428, "추가 인증이 필요합니다. POST /auth/stepup 으로 인증 코드와 사유를 제출하세요")

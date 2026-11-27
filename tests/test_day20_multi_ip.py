@@ -85,7 +85,42 @@ def test_stolen_token_used_from_another_ip_is_stopped_by_stepup(client):
     assert "R14" in [a["rule_id"] for a in q("SELECT rule_id FROM alerts")]
     assert get(client, h, "203.0.113.99", 3).status_code == 428  # 이후 요청은 재인증 전까지 거부
     assert q("SELECT status FROM users WHERE username='agent02'")[0]["status"] == "active"  # 계정은 잠그지 않음
-    assert get(client, h, "198.51.100.10", 4).status_code == 428  # 정상 사용자도 재인증 전까지 막힘(계정 단위 대응의 비용)
+    assert get(client, h, "198.51.100.10", 4).status_code == 200  # 토큰을 발급받은 IP의 정상 사용자는 계속 사용 가능
+    assert get(client, h, "203.0.113.99", 5).status_code == 428
+
+
+def test_scope_widens_when_another_rule_requires_full_stepup(client):
+    h = token(client)
+    get(client, h, "198.51.100.10")
+    get(client, h, "203.0.113.99", 2)
+    q("SELECT 1")
+    from app import db as dbm
+    conn = dbm.connect()
+    conn.execute("UPDATE users SET stepup_scope=NULL WHERE username='agent02'")  # 다른 규칙의 전체 재인증 상태
+    conn.commit()
+    conn.close()
+    assert get(client, h, "198.51.100.10", 3).status_code == 428
+
+
+def test_token_without_ip_claim_gets_full_stepup(client):
+    from app import security
+    h = token(client)
+    get(client, h, "198.51.100.10")
+    get(client, h, "203.0.113.99", 2)
+    user = q("SELECT * FROM users WHERE username='agent02'")[0]
+    old = {"Authorization": "Bearer " + security.create_token(user)}  # ip 클레임 없는 토큰
+    assert get(client, old, "198.51.100.10", 3).status_code == 428
+
+
+def test_stepup_clears_scope(client):
+    from app import totp
+    h = token(client)
+    get(client, h, "198.51.100.10")
+    get(client, h, "203.0.113.99", 2)
+    secret = q("SELECT totp_secret FROM users WHERE username='agent02'")[0]["totp_secret"]
+    client.post("/auth/stepup", json={"code": totp.code_for(secret), "reason": "모바일 네트워크로 전환함"}, headers=h)
+    row = q("SELECT stepup_required, stepup_scope FROM users WHERE username='agent02'")[0]
+    assert row["stepup_required"] == 0 and row["stepup_scope"] is None
 
 
 def test_legitimate_user_can_continue_after_stepup(client):
